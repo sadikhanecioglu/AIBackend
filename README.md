@@ -5,7 +5,7 @@ A FastAPI-based Multi-modal AI Gateway that orchestrates Speech-to-Text (STT) �
 ## ✨ Features
 
 - 🎙️ **Speech-to-Text Integration**: Support for OpenAI Whisper, Azure Speech, Google Speech
-- 🤖 **LLM Integration**: OpenAI GPT, Anthropic Claude, Google Gemini, Azure OpenAI
+- 🤖 **LLM Integration**: OpenAI GPT, Anthropic Claude, Google Gemini, Azure OpenAI, VertexAI, Ollama
 - 🔊 **Text-to-Speech**: OpenAI TTS, Azure Speech, Google TTS
 - 🖼️ **Image Generation**: OpenAI DALL-E, Stability AI, Azure OpenAI
 - 🔄 **Real-time Communication**: WebSocket support for voice conversations
@@ -65,6 +65,7 @@ The API will be available at:
 - **HTTP**: http://localhost:8000
 - **WebSocket**: ws://localhost:8000/voice
 - **Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
 
 ## 📋 Environment Configuration
 
@@ -92,6 +93,127 @@ DEFAULT_STT_PROVIDER=openai
 DEFAULT_LLM_PROVIDER=openai
 DEFAULT_TTS_PROVIDER=openai
 DEFAULT_AUDIO_PROCESSOR=whisper
+
+# VertexAI
+VERTEXAI_PROJECT_ID=your_project_id
+VERTEXAI_SERVICE_ACCOUNT_JSON=path/to/service-account.json
+VERTEXAI_MODEL=mistral-large-2411
+
+# Ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:latest
+```
+
+## 🎯 Supported Models
+
+### OpenAI Models
+The system supports dynamic model selection for OpenAI. You can specify any OpenAI model in your requests:
+
+**Popular Models:**
+- `gpt-3.5-turbo` (default)
+- `gpt-4` 
+- `gpt-4-turbo`
+- `gpt-4o`
+- `gpt-4o-mini`
+- `gpt-3.5-turbo-16k`
+- `gpt-4-32k`
+
+**Usage:**
+```json
+{
+  "prompt": "Your question",
+  "llm_provider": "openai",
+  "model": "gpt-4o"
+}
+```
+
+### Anthropic Models
+**Supported Models:**
+- `claude-3-haiku-20240307` (default)
+- `claude-3-sonnet-20240229`
+- `claude-3-opus-20240229`
+- `claude-3-5-sonnet-20241022`
+- `claude-2.1`
+- `claude-2.0`
+
+**Usage:**
+```json
+{
+  "prompt": "Your question",
+  "llm_provider": "anthropic",
+  "model": "claude-3-opus-20240229"
+}
+```
+
+### Google Gemini Models
+**Supported Models:**
+- `models/gemini-2.5-flash` (default)
+- `models/gemini-2.5-pro`
+- `models/gemini-1.5-pro`
+- `models/gemini-1.5-flash`
+
+**Usage:**
+```json
+{
+  "prompt": "Your question",
+  "llm_provider": "gemini",
+  "model": "models/gemini-2.5-pro"
+}
+```
+
+### VertexAI Models
+**Supported Models:**
+- `mistral-large-2411` (default)
+- `claude-3-5-sonnet@20241022`
+- `claude-3-opus@20240229`
+- `claude-3-sonnet@20240229`
+- `claude-3-haiku@20240307`
+- `gemini-1.5-pro`
+- `gemini-1.5-flash`
+
+**Usage:**
+```json
+{
+  "prompt": "Your question",
+  "llm_provider": "vertexai",
+  "model": "claude-3-5-sonnet@20241022"
+}
+```
+
+### Ollama Models
+**Popular Models:** (requires local Ollama installation)
+- `llama3.1:latest` (default)
+- `llama3.1:8b`
+- `llama3.1:70b`
+- `llama2:latest`
+- `codellama:latest`
+- `mistral:latest`
+- `phi3:latest`
+- `qwen2:latest`
+
+**Usage:**
+```json
+{
+  "prompt": "Your question",
+  "llm_provider": "ollama",
+  "model": "llama3.1:8b"
+}
+```
+
+### Azure OpenAI Models
+**Supported Models:**
+- `gpt-35-turbo` (default)
+- `gpt-4`
+- `gpt-4-turbo`
+- `gpt-4o`
+
+**Usage:**
+```json
+{
+  "prompt": "Your question",
+  "llm_provider": "azure",
+  "model": "gpt-4"
+}
 ```
 
 ## 🔧 API Endpoints
@@ -114,13 +236,16 @@ GET /sessions
 
 ### LLM Chat
 ```http
-POST /llm
+POST /api/v1/llm/generate
 Content-Type: application/json
 
 {
   "prompt": "Hello, how are you?",
   "history": [{"role": "user", "content": "Previous message"}],
-  "llm_provider": "openai"
+  "llm_provider": "openai",
+  "model": "gpt-4o",
+  "temperature": 0.7,
+  "max_tokens": 1000
 }
 ```
 
@@ -223,16 +348,39 @@ ai-backend/
 ```python
 import requests
 
-# Chat with OpenAI GPT
-response = requests.post("http://localhost:8000/llm", json={
+# Chat with OpenAI GPT-4o
+response = requests.post("http://localhost:8000/api/v1/llm/generate", json={
     "prompt": "Explain quantum computing",
-    "llm_provider": "openai"
+    "llm_provider": "openai",
+    "model": "gpt-4o"
 })
 
-# Chat with Anthropic Claude
-response = requests.post("http://localhost:8000/llm", json={
+# Chat with Anthropic Claude Opus
+response = requests.post("http://localhost:8000/api/v1/llm/generate", json={
     "prompt": "Explain quantum computing",
-    "llm_provider": "anthropic"
+    "llm_provider": "anthropic",
+    "model": "claude-3-opus-20240229"
+})
+
+# Chat with Google Gemini Pro
+response = requests.post("http://localhost:8000/api/v1/llm/generate", json={
+    "prompt": "Explain quantum computing",
+    "llm_provider": "gemini",
+    "model": "models/gemini-2.5-pro"
+})
+
+# Chat with VertexAI Mistral
+response = requests.post("http://localhost:8000/api/v1/llm/generate", json={
+    "prompt": "Explain quantum computing",
+    "llm_provider": "vertexai",
+    "model": "mistral-large-2411"
+})
+
+# Chat with Ollama Llama
+response = requests.post("http://localhost:8000/api/v1/llm/generate", json={
+    "prompt": "Explain quantum computing",
+    "llm_provider": "ollama",
+    "model": "llama3.1:8b"
 })
 ```
 
@@ -330,6 +478,7 @@ services:
 
 ## 🧪 Testing
 
+### Run Unit Tests
 ```bash
 # Run all tests
 python -m pytest tests/
@@ -339,6 +488,54 @@ python -m pytest tests/test_providers.py
 
 # Test endpoints manually
 python scripts/test_endpoints.py
+```
+
+### Test Different Models
+```bash
+# Test OpenAI GPT-4o
+curl -X POST "http://localhost:8000/api/v1/llm/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "What is AI?",
+    "llm_provider": "openai",
+    "model": "gpt-4o"
+  }'
+
+# Test Anthropic Claude Opus
+curl -X POST "http://localhost:8000/api/v1/llm/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "What is AI?",
+    "llm_provider": "anthropic", 
+    "model": "claude-3-opus-20240229"
+  }'
+
+# Test Google Gemini Pro
+curl -X POST "http://localhost:8000/api/v1/llm/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "What is AI?",
+    "llm_provider": "gemini",
+    "model": "models/gemini-2.5-pro"
+  }'
+
+# Test VertexAI
+curl -X POST "http://localhost:8000/api/v1/llm/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "What is AI?",
+    "llm_provider": "vertexai",
+    "model": "mistral-large-2411"
+  }'
+
+# Test Ollama (requires local Ollama installation)
+curl -X POST "http://localhost:8000/api/v1/llm/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "What is AI?",
+    "llm_provider": "ollama",
+    "model": "llama3.1:8b"
+  }'
 ```
 
 ## 📊 Monitoring and Logging

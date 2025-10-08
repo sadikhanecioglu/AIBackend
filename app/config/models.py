@@ -27,6 +27,13 @@ class AIGatewayConfig:
     azure_speech_region: Optional[str] = None
     vertexai_service_account_json: Optional[str] = None
     vertexai_project_id: Optional[str] = None
+    vertexai_model: Optional[str] = (
+        "mistral-large-2411"  # Default to mistral-large-2411
+    )
+
+    # Ollama settings
+    ollama_base_url: Optional[str] = "http://localhost:11434"  # Default Ollama server
+    ollama_model: Optional[str] = "llama3.1:latest"  # Default Ollama model
 
     # Application settings
     max_sessions: int = 100
@@ -57,6 +64,18 @@ class AIGatewayConfig:
             "tts_provider": self.tts_provider,
             "image_provider": self.image_provider,
             "audio_processor": self.audio_processor,
+            "openai_api_key": self.openai_api_key,
+            "anthropic_api_key": self.anthropic_api_key,
+            "google_api_key": self.google_api_key,
+            "azure_openai_api_key": self.azure_openai_api_key,
+            "azure_openai_endpoint": self.azure_openai_endpoint,
+            "azure_speech_key": self.azure_speech_key,
+            "azure_speech_region": self.azure_speech_region,
+            "vertexai_service_account_json": self.vertexai_service_account_json,
+            "vertexai_project_id": self.vertexai_project_id,
+            "vertexai_model": self.vertexai_model,
+            "ollama_base_url": self.ollama_base_url,
+            "ollama_model": self.ollama_model,
             "max_sessions": self.max_sessions,
             "session_timeout": self.session_timeout,
             "audio_sample_rate": self.audio_sample_rate,

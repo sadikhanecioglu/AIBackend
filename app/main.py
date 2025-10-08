@@ -24,8 +24,7 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -39,26 +38,26 @@ active_sessions: Dict[str, Dict] = {}
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     global config_manager, app_config
-    
+
     # Startup
     logger.info("🚀 Starting AI Gateway...")
-    
+
     # Initialize configuration
     config_manager = ConfigManager()
     app_config = config_manager.load_config()
-    
+
     # Store in app state for dependency injection
     app.state.config_manager = config_manager
     app.state.app_config = app_config
     app.state.active_sessions = active_sessions
-    
+
     # Print configuration
     config_manager.print_config()
-    
+
     logger.info("✅ AI Gateway started successfully")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("🛑 Shutting down AI Gateway...")
     # Clean up active sessions
@@ -68,16 +67,16 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
-    
+
     app = FastAPI(
         title="Multi-modal AI Gateway",
         description="A modular AI Gateway supporting STT → LLM → TTS workflows",
         version="2.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
-    
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -86,17 +85,17 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Exception handlers
     setup_exception_handlers(app)
-    
+
     # Include routers
     app.include_router(health.router, prefix="/health", tags=["Health"])
-    app.include_router(providers.router, prefix="/providers", tags=["Providers"])
-    app.include_router(llm.router, prefix="/llm", tags=["LLM"])
-    app.include_router(image.router, prefix="/image", tags=["Image"])
+    app.include_router(providers.router, prefix="/api/v1/providers", tags=["Providers"])
+    app.include_router(llm.router, prefix="/api/v1/llm", tags=["LLM"])
+    app.include_router(image.router, prefix="/api/v1/image", tags=["Image"])
     app.include_router(websocket.router, tags=["WebSocket"])
-    
+
     return app
 
 
@@ -106,7 +105,8 @@ app = create_app()
 
 def main():
     """Main entry point"""
-    print("""
+    print(
+        """
 🚀 Multi-modal AI Gateway v2.0
 ===============================
 🎯 Features:
@@ -132,14 +132,11 @@ def main():
   # Custom port
   python -m app.main --port 8080
 ===============================
-    """)
-    
+    """
+    )
+
     uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        "app.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
     )
 
 

@@ -10,9 +10,21 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from llm_provider import LLMProviderFactory, GenerationRequest
-from llm_provider.utils.config import ProviderConfig, VertexAIConfig
+from llm_provider.providers import VertexAI
+from llm_provider.utils.config import (
+    VertexAIConfig,
+    OpenAIConfig,
+    AnthropicConfig,
+    ProviderConfig,
+    GeminiConfig,
+    OllamaConfig,
+)
 from app.config.models import AIGatewayConfig
 from app.api.dependencies import get_config
+
+
+# Standard factory using llm-provider-factory for all providers
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -24,6 +36,7 @@ class LLMRequest(BaseModel):
     prompt: str
     history: Optional[List[Dict[str, str]]] = None
     llm_provider: Optional[str] = None
+    model: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     stream: Optional[bool] = False
@@ -63,48 +76,140 @@ async def generate_text(
 
         if provider_name == "openai":
             api_key = config.openai_api_key
-            model = "gpt-3.5-turbo"
+            model = request.model or "gpt-3.5-turbo"
         elif provider_name == "anthropic":
             api_key = config.anthropic_api_key
-            model = "claude-3-sonnet-20240229"
-        elif provider_name == "google":
+            model = request.model or "claude-3-haiku-20240307"
+        elif provider_name == "google" or provider_name == "gemini":
             api_key = config.google_api_key
-            model = "gemini-pro"
+            # Support both gemini models, default to flash
+            if hasattr(request, "model") and request.model:
+                if "2.5-pro" in request.model.lower():
+                    model = "models/gemini-2.5-pro"
+                elif "2.5-flash" in request.model.lower():
+                    model = "models/gemini-2.5-flash"
+                else:
+                    model = (
+                        request.model
+                        if request.model.startswith("models/")
+                        else f"models/{request.model}"
+                    )
+            else:
+                model = "models/gemini-2.5-flash"  # default
         elif provider_name == "azure":
             api_key = config.azure_openai_api_key
-            model = "gpt-35-turbo"
+            model = request.model or "gpt-35-turbo"
         elif provider_name == "vertexai":
             projectid = config.vertexai_project_id
             service_account_json = config.vertexai_service_account_json
-            model = "gemini-pro"
+            model = request.model or config.vertexai_model or "mistral-large-2411"
 
-        if not api_key:
+            if not projectid:
+                raise HTTPException(
+                    status_code=500,
+                    detail="VertexAI Project ID not configured (VERTEXAI_PROJECT_ID)",
+                )
+            if not service_account_json:
+                raise HTTPException(
+                    status_code=500,
+                    detail="VertexAI service account JSON path not configured (VERTEXAI_SERVICE_ACCOUNT_JSON)",
+                )
+        elif provider_name == "ollama":
+            base_url = config.ollama_base_url or "http://localhost:11434"
+            model = request.model or config.ollama_model or "llama3.1:latest"
+
+        if not api_key and provider_name not in ["vertexai", "ollama"]:
             raise HTTPException(
                 status_code=500,
                 detail=f"API key not configured for provider: {provider_name}",
             )
 
-        config = VertexAIConfig(
-            project_id=projectid,
-            location="us-central1",
-            model=model,
-            credentials_path=service_account_json,
-        )
+        # Create LLM provider using enhanced factory
+        if provider_name == "vertexai":
+            logger.info(
+                f"🔍 Creating VertexAI provider with config: project_id={projectid}, model={model}"
+            )
 
-        # Create LLM provider using llm-provider-factory
-        provider_config = ProviderConfig(
-            api_key=api_key,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            organization=None,  # Required for OpenAI
-            base_url=None,  # Required for OpenAI
-            timeout=30,  # Default timeout
-        )
+            vertexai_config = VertexAIConfig(
+                project_id=projectid,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                service_account_json=service_account_json,
+            )
 
-        llm_provider = LLMProviderFactory().create_provider(
-            provider_name=provider_name, config=provider_config
-        )
+            # Use standard factory
+            factory = LLMProviderFactory()
+            llm_provider = factory.create_provider(provider_name, vertexai_config)
+            logger.info(f"✅ VertexAI provider created: {type(llm_provider)}")
+        elif provider_name == "ollama":
+            logger.info(
+                f"🔍 Creating Ollama provider with config: base_url={base_url}, model={model}"
+            )
+
+            ollama_config = OllamaConfig(
+                base_url=base_url,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+
+            # Use standard factory
+            factory = LLMProviderFactory()
+            llm_provider = factory.create_provider(provider_name, ollama_config)
+            logger.info(f"✅ Ollama provider created: {type(llm_provider)}")
+        else:
+            # Standard providers - use config classes like test file
+            llm_provider = None  # Initialize to ensure it's set
+
+            if provider_name == "openai":
+                provider_config = OpenAIConfig(
+                    api_key=api_key,
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                # Use factory exactly like test file
+                factory = LLMProviderFactory()
+                llm_provider = factory.create_provider(provider_name, provider_config)
+
+            elif provider_name == "anthropic":
+                provider_config = AnthropicConfig(
+                    api_key=api_key,
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                # Use factory exactly like test file
+                factory = LLMProviderFactory()
+                llm_provider = factory.create_provider(provider_name, provider_config)
+
+            elif provider_name == "google" or provider_name == "gemini":
+                # For Gemini, use GeminiConfig
+                provider_config = GeminiConfig(
+                    api_key=api_key,
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                # Use 'gemini' as provider name for factory
+                factory = LLMProviderFactory()
+                llm_provider = factory.create_provider("gemini", provider_config)
+            else:
+                # Fallback to ProviderConfig for other providers
+                provider_config = ProviderConfig(
+                    api_key=api_key,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    organization=None,
+                    base_url=None,
+                    timeout=30,
+                )
+
+                # Use factory exactly like test file
+                factory = LLMProviderFactory()
+                llm_provider = factory.create_provider(provider_name, provider_config)
 
         if llm_provider is None:
             raise HTTPException(
@@ -114,7 +219,7 @@ async def generate_text(
         # Initialize provider
         await llm_provider.initialize()
 
-        # Create generation request
+        # Create generation request - use standard format for all providers
         generation_request = GenerationRequest(
             prompt=request.prompt, history=request.history
         )
