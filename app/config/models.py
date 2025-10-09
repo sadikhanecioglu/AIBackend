@@ -31,6 +31,9 @@ class AIGatewayConfig:
         "mistral-large-2411"  # Default to mistral-large-2411
     )
 
+    # Replicate settings
+    replicate_api_token: Optional[str] = None
+
     # Ollama settings
     ollama_base_url: Optional[str] = "http://localhost:11434"  # Default Ollama server
     ollama_model: Optional[str] = "llama3.1:latest"  # Default Ollama model
@@ -74,6 +77,7 @@ class AIGatewayConfig:
             "vertexai_service_account_json": self.vertexai_service_account_json,
             "vertexai_project_id": self.vertexai_project_id,
             "vertexai_model": self.vertexai_model,
+            "replicate_api_token": self.replicate_api_token,
             "ollama_base_url": self.ollama_base_url,
             "ollama_model": self.ollama_model,
             "max_sessions": self.max_sessions,

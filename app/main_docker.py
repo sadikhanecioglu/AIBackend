@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Multi-modal Modular AI Gateway
-FastAPI application with modular provider support using llm-provider-factory
+Multi-modal Modular AI Gateway - Docker Version
+FastAPI application with direct provider support for Docker deployment
 """
 
 import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
+import os
 
 import uvicorn
 from fastapi import FastAPI
@@ -16,7 +17,7 @@ from dotenv import load_dotenv
 
 from app.config.manager import ConfigManager
 from app.config.models import AIGatewayConfig
-from app.api.routes import health, llm, image, providers, websocket
+from app.api.routes import health, image, providers, websocket
 from app.core.exceptions import setup_exception_handlers
 
 # Load environment variables
@@ -40,7 +41,7 @@ async def lifespan(app: FastAPI):
     global config_manager, app_config
 
     # Startup
-    logger.info("🚀 Starting AI Gateway...")
+    logger.info("🚀 Starting AI Gateway (Docker)...")
 
     # Initialize configuration
     config_manager = ConfigManager()
@@ -92,7 +93,17 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(health.router, prefix="/health", tags=["Health"])
     app.include_router(providers.router, prefix="/api/providers", tags=["Providers"])
-    app.include_router(llm.router, prefix="/api/llm", tags=["LLM"])
+
+    # Use Docker-specific LLM router
+    if os.getenv("DOCKER_ENV", "false").lower() == "true":
+        from app.api.routes import llm_docker
+
+        app.include_router(llm_docker.router, prefix="/api/llm", tags=["LLM"])
+    else:
+        from app.api.routes import llm
+
+        app.include_router(llm.router, prefix="/api/llm", tags=["LLM"])
+
     app.include_router(image.router, prefix="/api/image", tags=["Image"])
     app.include_router(websocket.router, tags=["WebSocket"])
 
@@ -107,36 +118,31 @@ def main():
     """Main entry point"""
     print(
         """
-🚀 Multi-modal AI Gateway v2.0
-===============================
+🐳 Multi-modal AI Gateway v2.0 (Docker)
+=======================================
 🎯 Features:
-  ✅ Modular provider architecture
-  ✅ STT → LLM → TTS pipeline
-  ✅ WebSocket voice communication
+  ✅ Direct provider integration
+  ✅ OpenAI, Anthropic, Gemini support
   ✅ REST API endpoints
   ✅ Dynamic configuration
   ✅ Session management
 
 🌐 Endpoints:
-  🔗 WebSocket: ws://localhost:8000/voice
   📊 Health: http://localhost:8000/health
-  🔧 Providers: http://localhost:8000/providers
-  🤖 LLM: http://localhost:8000/llm
-  🖼️ Image: http://localhost:8000/image
+  🔧 Providers: http://localhost:8000/api/providers
+  🤖 LLM: http://localhost:8000/api/llm
+  🖼️ Image: http://localhost:8000/api/image
   📚 Docs: http://localhost:8000/docs
 
 🔧 Usage:
-  # Default configuration
-  python -m app.main
-  
-  # Custom port
-  python -m app.main --port 8080
-===============================
+  # Docker deployment
+  docker-compose up --build
+=======================================
     """
     )
 
     uvicorn.run(
-        "app.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
+        "app.main_docker:app", host="0.0.0.0", port=8000, reload=False, log_level="info"
     )
 
 

@@ -253,38 +253,6 @@ async def generate_text(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/chat")
-async def chat_conversation(
-    request: LLMRequest, config: AIGatewayConfig = Depends(get_config)
-) -> Dict[str, Any]:
-    """Chat-style conversation with conversation history management"""
-
-    try:
-        # Generate response using the main endpoint logic
-        response = await generate_text(request, config)
-
-        # Build updated conversation history
-        updated_history = request.history.copy() if request.history else []
-        updated_history.append({"role": "user", "content": request.prompt})
-        updated_history.append({"role": "assistant", "content": response.response})
-
-        # Keep history manageable (last 20 messages)
-        if len(updated_history) > 20:
-            updated_history = updated_history[-20:]
-
-        return {
-            "response": response.content,  # Use response.content
-            "provider": response.provider,
-            "conversation_history": updated_history,
-            "usage": response.usage,
-            "model": response.model,
-        }
-
-    except Exception as e:
-        logger.error(f"Chat conversation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/providers")
 async def get_llm_providers() -> Dict[str, Any]:
     """Get available LLM providers"""

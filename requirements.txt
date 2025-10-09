@@ -1,18 +1,18 @@
 # Core FastAPI dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+fastapi>=0.115.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
 
 # Configuration and environment
-python-dotenv==1.0.0
-pydantic==2.5.0
+python-dotenv>=1.0.0
+pydantic>=2.6.0
 
 # LLM Provider Factory
-llm-provider-factory==0.1.0
+llm-provider-factory==0.4.1
 
 # HTTP and WebSocket
-websockets==12.0
-httpx==0.25.2
+websockets>=13.0
+httpx>=0.28.1
 
 # Audio processing (for future STT/TTS integration)
 pydub==0.25.1
@@ -27,14 +27,3 @@ pytest-asyncio==0.21.1
 black==23.11.0
 flake8==6.1.0
 mypy==1.7.1
-
-# Optional: Database support (if needed for session persistence)
-# sqlalchemy==2.0.23
-# alembic==1.13.1
-
-# Optional: Redis support (if needed for session caching)
-# redis==5.0.1
-
-# Optional: Authentication
-# python-jose[cryptography]==3.3.0
-# passlib[bcrypt]==1.7.4

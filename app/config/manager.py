@@ -80,6 +80,8 @@ class ConfigManager:
             env_config["anthropic_api_key"] = os.getenv("ANTHROPIC_API_KEY")
         if os.getenv("GOOGLE_API_KEY"):
             env_config["google_api_key"] = os.getenv("GOOGLE_API_KEY")
+        if os.getenv("REPLICATE_API_TOKEN"):
+            env_config["replicate_api_token"] = os.getenv("REPLICATE_API_TOKEN")
         if os.getenv("AZURE_OPENAI_API_KEY"):
             env_config["azure_openai_api_key"] = os.getenv("AZURE_OPENAI_API_KEY")
         if os.getenv("AZURE_OPENAI_ENDPOINT"):
@@ -122,6 +124,7 @@ class ConfigManager:
                 "openai_api_key",
                 "anthropic_api_key",
                 "google_api_key",
+                "replicate_api_token",
                 "azure_openai_api_key",
                 "azure_speech_key",
                 "vertexai_service_account_json",
@@ -168,6 +171,7 @@ class ConfigManager:
             "openai_api_key",
             "anthropic_api_key",
             "google_api_key",
+            "replicate_api_token",
             "azure_openai_api_key",
             "azure_speech_key",
             "vertexai_service_account_json",
