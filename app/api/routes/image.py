@@ -44,6 +44,7 @@ class ImageRequest(BaseModel):
     guidance_scale: Optional[float] = None
     num_inference_steps: Optional[int] = None
     scheduler: Optional[str] = None
+    reference_image_url: Optional[str] = None
 
 
 class ImageResponse(BaseModel):

@@ -177,3 +177,5 @@ generated_images/
 
 # Session files
 sessions/
+credentials/service-account.json
+.env.docker

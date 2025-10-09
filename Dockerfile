@@ -15,6 +15,12 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Create credentials directory
+RUN mkdir -p /app/credentials
+
+# Copy service account file
+COPY credentials/service-account.json /app/credentials/service-account.json
+
 # Copy application code
 COPY . .
 

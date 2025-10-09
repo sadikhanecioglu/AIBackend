@@ -21,6 +21,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./config:/app/config
+      - ./credentials/service-account.json:/app/credentials/service-account.json:ro
     networks:
       - ai-gateway-network
     restart: unless-stopped
