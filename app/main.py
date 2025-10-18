@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 from app.config.manager import ConfigManager
 from app.config.models import AIGatewayConfig
-from app.api.routes import health, llm, image, providers, websocket
+from app.api.routes import health, llm, image, providers, websocket, stt
 from app.core.exceptions import setup_exception_handlers
 
 # Load environment variables
@@ -94,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(providers.router, prefix="/api/providers", tags=["Providers"])
     app.include_router(llm.router, prefix="/api/llm", tags=["LLM"])
     app.include_router(image.router, prefix="/api/image", tags=["Image"])
+    app.include_router(stt.router, prefix="/api/stt", tags=["Speech-to-Text"])
     app.include_router(websocket.router, tags=["WebSocket"])
 
     return app

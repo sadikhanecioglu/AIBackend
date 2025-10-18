@@ -2,26 +2,21 @@ version: '3.8'
 
 services:
   ai-gateway:
-    build: .
+    # Build yerine Hub image kullan (production için)
+    image: sadikhanecioglu/ai-gateway:latest
+    container_name: ai-gateway
     ports:
       - "8000:8000"
     environment:
-      # Load from .env file
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
-      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION}
-      - DEFAULT_STT_PROVIDER=${DEFAULT_STT_PROVIDER:-openai}
-      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
-      - DEFAULT_TTS_PROVIDER=${DEFAULT_TTS_PROVIDER:-openai}
-      - DEFAULT_IMAGE_PROVIDER=${DEFAULT_IMAGE_PROVIDER:-openai}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+    env_file:
+      - .env.production  # Production environment file
     volumes:
+      - ./credentials/service-account.json:/app/credentials/service-account.json:ro
       - ./logs:/app/logs
       - ./config:/app/config
-      - ./credentials/service-account.json:/app/credentials/service-account.json:ro
     networks:
       - ai-gateway-network
     restart: unless-stopped
@@ -30,39 +25,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
 
-  # Optional: Redis for session caching
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   networks:
-  #     - ai-gateway-network
-  #   restart: unless-stopped
 
-  # Optional: PostgreSQL for session persistence
-  # postgres:
-  #   image: postgres:15-alpine
-  #   environment:
-  #     POSTGRES_DB: ai_gateway
-  #     POSTGRES_USER: ai_gateway
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #   networks:
-  #     - ai-gateway-network
-  #   restart: unless-stopped
-
+  
 networks:
   ai-gateway-network:
     driver: bridge
 
 volumes:
-  # redis_data:
-  # postgres_data:
   logs:

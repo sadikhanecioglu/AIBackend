@@ -7,16 +7,20 @@ python-multipart>=0.0.6
 python-dotenv>=1.0.0
 pydantic>=2.6.0
 
-# LLM Provider Factory
-llm-provider-factory==0.5.7
+# LLM Provider Factory with all providers
+llm-provider-factory[all]==0.6.0
 
 # HTTP and WebSocket
 websockets>=13.0
 httpx>=0.28.1
 
-# Audio processing (for future STT/TTS integration)
+# Audio processing and STT/TTS integration
 pydub==0.25.1
 numpy==1.24.3
+speechrecognition==3.10.4
+openai-whisper==20231117
+assemblyai==0.33.0
+deepgram-sdk==3.6.0
 
 # Logging and monitoring
 structlog==23.2.0

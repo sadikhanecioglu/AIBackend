@@ -3,7 +3,7 @@ Configuration models for the AI Gateway
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 
 @dataclass
@@ -38,6 +38,10 @@ class AIGatewayConfig:
     ollama_base_url: Optional[str] = "http://localhost:11434"  # Default Ollama server
     ollama_model: Optional[str] = "llama3.1:latest"  # Default Ollama model
 
+    # STT Provider settings
+    assemblyai_api_key: Optional[str] = None
+    deepgram_api_key: Optional[str] = None
+
     # Application settings
     max_sessions: int = 100
     session_timeout: int = 3600  # seconds
@@ -47,6 +51,10 @@ class AIGatewayConfig:
     # LLM settings
     llm_temperature: float = 0.7
     llm_max_tokens: int = 1000
+
+    # STT settings
+    stt_max_file_size: int = 25 * 1024 * 1024  # 25MB
+    stt_supported_formats: List[str] = field(default_factory=lambda: ["mp3", "wav", "m4a", "ogg", "flac", "webm"])
 
     # Image generation settings
     image_size: str = "1024x1024"

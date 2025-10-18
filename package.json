@@ -1,0 +1,28 @@
+{
+  "name": "ai-gateway-stt-client",
+  "version": "1.0.0",
+  "description": "Node.js client for AI Gateway STT API testing",
+  "main": "nodejs_stt_test.js",
+  "scripts": {
+    "test": "node nodejs_stt_test.js",
+    "test-file": "node -e \"require('./nodejs_stt_test').testFileUpload()\"",
+    "test-base64": "node -e \"require('./nodejs_stt_test').testBase64Upload()\"",
+    "test-providers": "node -e \"require('./nodejs_stt_test').testProviders()\""
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "multer": "^1.4.5-lts.1"
+  },
+  "keywords": [
+    "stt",
+    "speech-to-text",
+    "ai-gateway",
+    "openai",
+    "whisper"
+  ],
+  "author": "AI Gateway Team",
+  "license": "MIT"
+}
