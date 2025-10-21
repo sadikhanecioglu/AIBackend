@@ -24,7 +24,7 @@ The Embedding API converts text into vector representations (embeddings) that ca
 ### Generate Single Embedding
 
 ```http
-POST /api/v1/llm/embed
+POST /api/llm/embed
 Content-Type: application/json
 
 {
@@ -51,7 +51,7 @@ Content-Type: application/json
 ### Generate Multiple Embeddings (Batch)
 
 ```http
-POST /api/v1/llm/embed
+POST /api/llm/embed
 Content-Type: application/json
 
 {
@@ -96,7 +96,7 @@ BASE_URL = "http://localhost:8000"
 # Single text embedding
 def embed_single_text():
     response = requests.post(
-        f"{BASE_URL}/api/v1/llm/embed",
+        f"{BASE_URL}/api/llm/embed",
         json={
             "text": "The quick brown fox jumps over the lazy dog",
             "embedding_provider": "openai",
@@ -108,7 +108,7 @@ def embed_single_text():
 # Multiple texts embedding (batch)
 def embed_multiple_texts():
     response = requests.post(
-        f"{BASE_URL}/api/v1/llm/embed",
+        f"{BASE_URL}/api/llm/embed",
         json={
             "texts": [
                 "The cat sat on the mat",
@@ -137,7 +137,7 @@ print(f"Similarity between text 1 and 2: {similarity:.4f}")
 # Using different providers
 def embed_with_google():
     response = requests.post(
-        f"{BASE_URL}/api/v1/llm/embed",
+        f"{BASE_URL}/api/llm/embed",
         json={
             "text": "Machine learning is fascinating",
             "embedding_provider": "google",
@@ -158,7 +158,7 @@ const BASE_URL = 'http://localhost:8000';
 async function embedSingleText() {
     try {
         const response = await axios.post(
-            `${BASE_URL}/api/v1/llm/embed`,
+            `${BASE_URL}/api/llm/embed`,
             {
                 text: "The quick brown fox jumps over the lazy dog",
                 embedding_provider: "openai",
@@ -176,7 +176,7 @@ async function embedSingleText() {
 async function embedMultipleTexts() {
     try {
         const response = await axios.post(
-            `${BASE_URL}/api/v1/llm/embed`,
+            `${BASE_URL}/api/llm/embed`,
             {
                 texts: [
                     "The cat sat on the mat",
@@ -210,7 +210,7 @@ async function semanticSearch(query, documents) {
 
     // Get document embeddings
     const docsResult = await axios.post(
-        `${BASE_URL}/api/v1/llm/embed`,
+        `${BASE_URL}/api/llm/embed`,
         {
             texts: documents,
             embedding_provider: "openai",
@@ -233,7 +233,7 @@ async function semanticSearch(query, documents) {
 
 ```bash
 # Single text embedding
-curl -X POST "http://localhost:8000/api/v1/llm/embed" \
+curl -X POST "http://localhost:8000/api/llm/embed" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "The quick brown fox",
@@ -242,7 +242,7 @@ curl -X POST "http://localhost:8000/api/v1/llm/embed" \
   }'
 
 # Batch embeddings
-curl -X POST "http://localhost:8000/api/v1/llm/embed" \
+curl -X POST "http://localhost:8000/api/llm/embed" \
   -H "Content-Type: application/json" \
   -d '{
     "texts": [
@@ -255,7 +255,7 @@ curl -X POST "http://localhost:8000/api/v1/llm/embed" \
   }'
 
 # Using Google provider
-curl -X POST "http://localhost:8000/api/v1/llm/embed" \
+curl -X POST "http://localhost:8000/api/llm/embed" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Machine learning is fascinating",
@@ -272,14 +272,14 @@ curl -X POST "http://localhost:8000/api/v1/llm/embed" \
 async def semantic_search(query: str, documents: List[str]):
     """Find most similar documents to query"""
     # Get query embedding
-    query_result = requests.post(f"{BASE_URL}/api/v1/llm/embed", json={
+    query_result = requests.post(f"{BASE_URL}/api/llm/embed", json={
         "text": query,
         "embedding_provider": "openai"
     })
     query_emb = query_result.json()["embeddings"][0]
     
     # Get document embeddings
-    docs_result = requests.post(f"{BASE_URL}/api/v1/llm/embed", json={
+    docs_result = requests.post(f"{BASE_URL}/api/llm/embed", json={
         "texts": documents,
         "embedding_provider": "openai"
     })
@@ -302,7 +302,7 @@ from sklearn.cluster import KMeans
 async def cluster_documents(documents: List[str], n_clusters: int = 3):
     """Cluster documents based on semantic similarity"""
     # Get embeddings
-    result = requests.post(f"{BASE_URL}/api/v1/llm/embed", json={
+    result = requests.post(f"{BASE_URL}/api/llm/embed", json={
         "texts": documents,
         "embedding_provider": "openai"
     })
@@ -325,7 +325,7 @@ async def cluster_documents(documents: List[str], n_clusters: int = 3):
 ```python
 async def find_duplicates(documents: List[str], threshold: float = 0.95):
     """Find duplicate or highly similar documents"""
-    result = requests.post(f"{BASE_URL}/api/v1/llm/embed", json={
+    result = requests.post(f"{BASE_URL}/api/llm/embed", json={
         "texts": documents,
         "embedding_provider": "openai"
     })
@@ -357,7 +357,7 @@ async def store_embeddings_in_pinecone(documents: List[str]):
     pinecone.init(api_key="YOUR_PINECONE_KEY", environment="us-west1-gcp")
     
     # Get embeddings
-    result = requests.post(f"{BASE_URL}/api/v1/llm/embed", json={
+    result = requests.post(f"{BASE_URL}/api/llm/embed", json={
         "texts": documents,
         "embedding_provider": "openai",
         "model": "text-embedding-3-small"
@@ -404,7 +404,7 @@ async def store_embeddings_in_pinecone(documents: List[str]):
 ```python
 try:
     response = requests.post(
-        f"{BASE_URL}/api/v1/llm/embed",
+        f"{BASE_URL}/api/llm/embed",
         json={"text": query, "embedding_provider": "openai"}
     )
     response.raise_for_status()

@@ -54,7 +54,7 @@ def test_single_embedding_openai():
     print_info(f"Payload: {json.dumps(payload, indent=2)}")
     
     try:
-        response = requests.post(f"{BASE_URL}/api/v1/llm/embed", json=payload)
+        response = requests.post(f"{BASE_URL}/api/llm/embed", json=payload)
         response.raise_for_status()
         
         data = response.json()
@@ -93,7 +93,7 @@ def test_batch_embeddings():
     print_info(f"Number of texts: {len(texts)}")
     
     try:
-        response = requests.post(f"{BASE_URL}/api/v1/llm/embed", json=payload)
+        response = requests.post(f"{BASE_URL}/api/llm/embed", json=payload)
         response.raise_for_status()
         
         data = response.json()
@@ -140,7 +140,7 @@ def test_semantic_search():
         # Get query embedding
         print_info("Generating query embedding...")
         query_response = requests.post(
-            f"{BASE_URL}/api/v1/llm/embed",
+            f"{BASE_URL}/api/llm/embed",
             json={
                 "text": query,
                 "embedding_provider": "openai",
@@ -154,7 +154,7 @@ def test_semantic_search():
         # Get document embeddings
         print_info("Generating document embeddings...")
         docs_response = requests.post(
-            f"{BASE_URL}/api/v1/llm/embed",
+            f"{BASE_URL}/api/llm/embed",
             json={
                 "texts": documents,
                 "embedding_provider": "openai",
@@ -200,7 +200,7 @@ def test_different_providers():
         
         try:
             response = requests.post(
-                f"{BASE_URL}/api/v1/llm/embed",
+                f"{BASE_URL}/api/llm/embed",
                 json={
                     "text": text,
                     "embedding_provider": provider,
@@ -242,7 +242,7 @@ def test_error_handling():
         
         try:
             response = requests.post(
-                f"{BASE_URL}/api/v1/llm/embed",
+                f"{BASE_URL}/api/llm/embed",
                 json=test['payload']
             )
             
