@@ -54,7 +54,9 @@ class AIGatewayConfig:
 
     # STT settings
     stt_max_file_size: int = 25 * 1024 * 1024  # 25MB
-    stt_supported_formats: List[str] = field(default_factory=lambda: ["mp3", "wav", "m4a", "ogg", "flac", "webm"])
+    stt_supported_formats: List[str] = field(
+        default_factory=lambda: ["mp3", "wav", "m4a", "ogg", "flac", "webm"]
+    )
 
     # Image generation settings
     image_size: str = "1024x1024"

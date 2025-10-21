@@ -9,148 +9,165 @@ from pathlib import Path
 # API Base URL
 API_BASE_URL = "http://localhost:8000/api/stt"
 
+
 async def test_file_upload():
     """File upload ile STT test"""
     print("🎤 Testing File Upload STT...")
-    
+
     audio_file = "test_audio.wav"
     if not os.path.exists(audio_file):
         print(f"❌ Audio file not found: {audio_file}")
         return None
-    
+
     try:
         async with httpx.AsyncClient() as client:
             with open(audio_file, "rb") as f:
                 files = {"file": f}
-                data = {
-                    "language": "tr",
-                    "timestamps": "true"
-                }
-                
+                data = {"language": "tr", "timestamps": "true"}
+
                 response = await client.post(
                     f"{API_BASE_URL}/transcribe/openai",
                     files=files,
                     data=data,
-                    timeout=30.0
+                    timeout=30.0,
                 )
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     print("✅ File Upload Success:")
                     print(f"   Text: {result['text']}")
                     print(f"   Provider: {result['provider']}")
                     print(f"   Processing Time: {result['processing_time']:.2f}s")
-                    
-                    if result.get('words'):
+
+                    if result.get("words"):
                         print("   Word Timestamps:")
-                        for word in result['words']:
-                            print(f"     {word['word']}: {word['start']:.2f}s-{word['end']:.2f}s")
-                    
+                        for word in result["words"]:
+                            print(
+                                f"     {word['word']}: {word['start']:.2f}s-{word['end']:.2f}s"
+                            )
+
                     return result
                 else:
-                    print(f"❌ File Upload Error: {response.status_code} - {response.text}")
+                    print(
+                        f"❌ File Upload Error: {response.status_code} - {response.text}"
+                    )
                     return None
-                    
+
     except Exception as e:
         print(f"❌ File Upload Exception: {e}")
         return None
 
+
 async def test_base64_upload():
     """Base64 ile STT test"""
     print("\\n🔐 Testing Base64 STT...")
-    
+
     audio_file = "test_audio.wav"
     if not os.path.exists(audio_file):
         print(f"❌ Audio file not found: {audio_file}")
         return None
-    
+
     try:
         # Ses dosyasını base64'e çevir
         with open(audio_file, "rb") as f:
             audio_data = f.read()
-            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-        
+            audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+
         request_data = {
             "audio_base64": audio_base64,
             "format": "wav",
             "language": "tr",
             "timestamps": True,
-            "word_timestamps": True
+            "word_timestamps": True,
         }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/transcribe-base64/openai",
                 json=request_data,
-                timeout=30.0
+                timeout=30.0,
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 print("✅ Base64 Upload Success:")
                 print(f"   Text: {result['text']}")
                 print(f"   Language: {result['language']}")
-                print(f"   Duration: {result['duration']:.2f}s" if result['duration'] else "   Duration: N/A")
+                print(
+                    f"   Duration: {result['duration']:.2f}s"
+                    if result["duration"]
+                    else "   Duration: N/A"
+                )
                 print(f"   Processing Time: {result['processing_time']:.2f}s")
-                
-                if result.get('words'):
+
+                if result.get("words"):
                     print("   Word Timestamps:")
-                    for word in result['words']:
-                        print(f"     {word['word']}: {word['start']:.2f}s-{word['end']:.2f}s")
-                
+                    for word in result["words"]:
+                        print(
+                            f"     {word['word']}: {word['start']:.2f}s-{word['end']:.2f}s"
+                        )
+
                 return result
             else:
-                print(f"❌ Base64 Upload Error: {response.status_code} - {response.text}")
+                print(
+                    f"❌ Base64 Upload Error: {response.status_code} - {response.text}"
+                )
                 return None
-                
+
     except Exception as e:
         print(f"❌ Base64 Upload Exception: {e}")
         return None
 
+
 async def test_url_upload():
     """URL ile STT test"""
     print("\\n🌐 Testing URL STT...")
-    
+
     try:
         # Test için bir örnek ses dosyası URL'i
         test_audio_url = "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav"
-        
+
         request_data = {
             "audio_url": test_audio_url,
             "language": "en",  # English for this test
             "timestamps": True,
-            "word_timestamps": True
+            "word_timestamps": True,
         }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/transcribe-url/openai",
                 json=request_data,
-                timeout=45.0  # URL download için uzun timeout
+                timeout=45.0,  # URL download için uzun timeout
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 print("✅ URL Upload Success:")
                 print(f"   Text: {result['text']}")
                 print(f"   Language: {result['language']}")
-                print(f"   Duration: {result['duration']:.2f}s" if result['duration'] else "   Duration: N/A")
+                print(
+                    f"   Duration: {result['duration']:.2f}s"
+                    if result["duration"]
+                    else "   Duration: N/A"
+                )
                 print(f"   Processing Time: {result['processing_time']:.2f}s")
-                
+
                 return result
             else:
                 print(f"❌ URL Upload Error: {response.status_code} - {response.text}")
                 return None
-                
+
     except Exception as e:
         print(f"❌ URL Upload Exception: {e}")
         # URL test başarısız olursa devam et
         return None
 
+
 async def test_providers():
     """Provider'ları ve API bilgilerini test et"""
     print("\\n🔧 Testing Providers...")
-    
+
     try:
         async with httpx.AsyncClient() as client:
             # API bilgisi
@@ -159,10 +176,12 @@ async def test_providers():
                 info = api_info.json()
                 print("✅ API Info:")
                 print(f"   Version: {info['version']}")
-                print(f"   Supported Providers: {', '.join(info['supported_providers'])}")
+                print(
+                    f"   Supported Providers: {', '.join(info['supported_providers'])}"
+                )
                 print(f"   Supported Formats: {', '.join(info['supported_formats'])}")
                 print(f"   Input Methods: {', '.join(info['input_methods'])}")
-            
+
             # Mevcut provider'lar
             providers = await client.get(f"{API_BASE_URL}/providers")
             if providers.status_code == 200:
@@ -170,47 +189,51 @@ async def test_providers():
                 print("\\n✅ Available Providers:")
                 print(f"   Active Providers: {', '.join(prov['providers'])}")
                 print(f"   Default Provider: {prov['default']}")
-            
+
             # Provider test
-            if 'openai' in prov.get('providers', []):
+            if "openai" in prov.get("providers", []):
                 test = await client.get(f"{API_BASE_URL}/test/openai")
                 if test.status_code == 200:
                     test_result = test.json()
                     print("\\n✅ OpenAI Provider Test:")
                     print(f"   Available: {test_result['available']}")
-                    print(f"   Supported Formats: {', '.join(test_result['supported_formats'])}")
-    
+                    print(
+                        f"   Supported Formats: {', '.join(test_result['supported_formats'])}"
+                    )
+
     except Exception as e:
         print(f"❌ Provider Test Exception: {e}")
+
 
 async def main():
     """Ana test fonksiyonu"""
     print("🚀 AI Gateway STT API Test Suite (Python)")
     print("==========================================\\n")
-    
+
     try:
         # Ses dosyasının varlığını kontrol et
         if not os.path.exists("test_audio.wav"):
             print("❌ Test audio file not found: ./test_audio.wav")
             print("Please create a test audio file first.")
             return
-        
+
         # 1. Provider testleri
         await test_providers()
-        
+
         # 2. File upload test
         await test_file_upload()
-        
+
         # 3. Base64 upload test
         await test_base64_upload()
-        
+
         # 4. URL upload test (optional)
         await test_url_upload()
-        
+
         print("\\n✅ All Python tests completed successfully!")
-        
+
     except Exception as error:
         print(f"\\n❌ Python test suite failed: {error}")
+
 
 def create_flask_example():
     """Flask example endpoint"""
@@ -324,12 +347,13 @@ if __name__ == '__main__':
     app.run(debug=True, port=5000)
 '''
 
+
 # Script çalıştır
 if __name__ == "__main__":
     # Flask örneğini göster
     print("\\n📋 Flask Example:")
     print(create_flask_example())
-    print("\\n" + "="*50)
-    
+    print("\\n" + "=" * 50)
+
     # Testleri çalıştır
     asyncio.run(main())
