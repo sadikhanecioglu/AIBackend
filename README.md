@@ -54,7 +54,10 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env with your API keys
+# Never commit .env to version control!
 ```
+
+> **⚠️ Security Warning**: The `.env` file contains sensitive API keys and should **NEVER** be committed to version control. It is automatically excluded by `.gitignore`. Use `.env.example` as a reference for required configuration variables.
 
 4. **Run the application**
 ```bash
