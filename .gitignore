@@ -177,7 +177,13 @@ generated_images/
 
 # Session files
 sessions/
-credentials/service-account.json
-.env.docker
-.env.dev
-.env.production
+
+# Credentials and Secrets - NEVER COMMIT
+credentials/
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
+```
