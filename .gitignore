@@ -180,3 +180,4 @@ sessions/
 credentials/service-account.json
 .env.docker
 .env.dev
+.env.production
