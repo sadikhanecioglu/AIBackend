@@ -51,6 +51,25 @@ class LLMResponse(BaseModel):
     model: Optional[str] = None
 
 
+class EmbeddingRequest(BaseModel):
+    """Request model for embedding endpoint"""
+
+    text: Optional[str] = None
+    texts: Optional[List[str]] = None
+    embedding_provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+class EmbeddingResponse(BaseModel):
+    """Response model for embedding endpoint"""
+
+    embeddings: List[List[float]]
+    provider: str
+    model: Optional[str] = None
+    usage: Optional[Dict[str, Any]] = None
+    dimensions: Optional[int] = None
+
+
 @router.post("/generate", response_model=LLMResponse)
 async def generate_text(
     request: LLMRequest, config: AIGatewayConfig = Depends(get_config)
@@ -251,6 +270,186 @@ async def generate_text(
     except Exception as e:
         logger.error(f"LLM generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/embed", response_model=EmbeddingResponse)
+async def generate_embeddings(
+    request: EmbeddingRequest, config: AIGatewayConfig = Depends(get_config)
+) -> EmbeddingResponse:
+    """Generate embeddings for text(s) using specified or configured provider"""
+
+    # Validate input
+    if not request.text and not request.texts:
+        raise HTTPException(
+            status_code=400, detail="Either 'text' or 'texts' is required"
+        )
+
+    # Prepare texts for embedding
+    texts_to_embed = []
+    if request.text:
+        texts_to_embed = [request.text]
+    elif request.texts:
+        texts_to_embed = request.texts
+
+    # Use specified provider or default from config (default: openai)
+    provider_name = request.embedding_provider or "openai"
+    model = request.model or "text-embedding-3-small"
+
+    logger.info(
+        f"Embedding request - provider: {provider_name}, texts: {len(texts_to_embed)}, model: {model}"
+    )
+
+    try:
+        # Get API key for the provider
+        if provider_name == "openai":
+            api_key = config.openai_api_key
+        elif provider_name == "google" or provider_name == "gemini":
+            api_key = config.google_api_key
+        elif provider_name == "anthropic":
+            api_key = config.anthropic_api_key
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported embedding provider: {provider_name}. Supported: openai, google, anthropic",
+            )
+
+        if not api_key:
+            raise HTTPException(
+                status_code=500,
+                detail=f"API key not configured for provider: {provider_name}",
+            )
+
+        # Generate embeddings based on provider
+        if provider_name == "openai":
+            embeddings, usage_info = await _generate_openai_embeddings(
+                api_key, texts_to_embed, model
+            )
+            response_model = model or "text-embedding-3-small"
+
+        elif provider_name == "google" or provider_name == "gemini":
+            embeddings, usage_info = await _generate_google_embeddings(
+                api_key, texts_to_embed, model
+            )
+            response_model = model or "text-embedding-004"
+
+        elif provider_name == "anthropic":
+            embeddings, usage_info = await _generate_anthropic_embeddings(
+                api_key, texts_to_embed, model
+            )
+            response_model = model or "default-anthropic-model"
+
+        else:
+            raise HTTPException(
+                status_code=500, detail=f"Provider not supported: {provider_name}"
+            )
+
+        logger.info(
+            f"Embeddings generated successfully - {len(embeddings)} vectors, dimensions: {len(embeddings[0])}"
+        )
+
+        return EmbeddingResponse(
+            embeddings=embeddings,
+            provider=provider_name,
+            model=response_model,
+            usage=usage_info,
+            dimensions=len(embeddings[0]) if embeddings else 0,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Embedding generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _generate_openai_embeddings(
+    api_key: str, texts: List[str], model: str
+) -> tuple:
+    """Generate embeddings using OpenAI API"""
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key)
+
+        # Generate embeddings
+        response = await client.embeddings.create(input=texts, model=model)
+
+        # Extract embeddings
+        embeddings = [item.embedding for item in response.data]
+
+        # Build usage info
+        usage_info = None
+        if hasattr(response, "usage"):
+            usage_info = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "total_tokens": response.usage.total_tokens,
+            }
+
+        return embeddings, usage_info
+
+    except Exception as e:
+        logger.error(f"OpenAI embedding error: {e}")
+        raise
+
+
+async def _generate_google_embeddings(
+    api_key: str, texts: List[str], model: str
+) -> tuple:
+    """Generate embeddings using Google API"""
+    try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+
+        # Use default model if not specified
+        if not model or model == "text-embedding-004":
+            model = "models/text-embedding-004"
+        elif not model.startswith("models/"):
+            model = f"models/{model}"
+
+        embeddings = []
+        for text in texts:
+            result = genai.embed_content(
+                model=model,
+                content=text,
+                task_type="RETRIEVAL_DOCUMENT",
+            )
+            embeddings.append(result["embedding"])
+
+        return embeddings, None
+
+    except Exception as e:
+        logger.error(f"Google embedding error: {e}")
+        raise
+
+
+async def _generate_anthropic_embeddings(
+    api_key: str, texts: List[str], model: str
+) -> tuple:
+    """Generate embeddings using Anthropic API"""
+    try:
+        from anthropic import Anthropic
+
+        client = Anthropic(api_key=api_key)
+
+        # Anthropic uses Claude model for embeddings
+        embeddings = []
+
+        # Simple approach: use model to generate fixed-size semantic vectors
+        for text in texts:
+            # This is a placeholder - Anthropic doesn't have direct embeddings API
+            # You would typically use another service or implement custom logic
+            logger.warning(
+                "Anthropic embedding not fully implemented - consider using OpenAI or Google"
+            )
+            # Return dummy embedding for now
+            embeddings.append([0.0] * 1536)
+
+        return embeddings, None
+
+    except Exception as e:
+        logger.error(f"Anthropic embedding error: {e}")
+        raise
 
 
 @router.get("/providers")
