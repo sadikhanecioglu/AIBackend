@@ -288,14 +288,14 @@ async def generate_text(
 
             # Convert OpenAI-style functions to tools
             tools = convert_openai_functions_to_tools(request.functions)
-            
+
             # 🔥 Convert dict tools to ToolFunction list for provider
             tool_functions = []
             for tool_name, tool_info in tools.items():
                 tool_func = ToolFunction(
                     name=tool_name,
                     description=tool_info.get("description", ""),
-                    parameters=tool_info.get("parameters", {})
+                    parameters=tool_info.get("parameters", {}),
                 )
                 tool_functions.append(tool_func)
 
@@ -327,9 +327,9 @@ async def generate_text(
 
             # Create generation request with enhanced prompt AND tools
             generation_request = GenerationRequest(
-                prompt=enhanced_prompt, 
+                prompt=enhanced_prompt,
                 history=request.history,
-                tools=tool_functions  # 🔥 Pass tools to provider!
+                tools=tool_functions,  # 🔥 Pass tools to provider!
             )
 
             # Generate response
@@ -372,7 +372,9 @@ async def generate_text(
                 tool_name = tool_call_data["tool"]
                 arguments = tool_call_data.get("arguments", {})
 
-                logger.info(f"� Function call detected: {tool_name} with args: {arguments}")
+                logger.info(
+                    f"� Function call detected: {tool_name} with args: {arguments}"
+                )
 
                 # Get usage information
                 usage_info = None

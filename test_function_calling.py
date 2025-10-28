@@ -10,7 +10,7 @@ import json
 async def test_calculator():
     """Test calculator function"""
     print("\n🧪 Testing Calculator Function...")
-    
+
     functions = [
         {
             "name": "calculator",
@@ -20,14 +20,14 @@ async def test_calculator():
                 "properties": {
                     "expression": {
                         "type": "string",
-                        "description": "Mathematical expression to evaluate"
+                        "description": "Mathematical expression to evaluate",
                     }
                 },
-                "required": ["expression"]
-            }
+                "required": ["expression"],
+            },
         }
     ]
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             "http://localhost:8000/api/llm/generate",
@@ -35,13 +35,13 @@ async def test_calculator():
                 "prompt": "Calculate sqrt(144) + 10",
                 "llm_provider": "vertexai",
                 "model": "models/gemini-2.0-flash",
-                "functions": functions
-            }
+                "functions": functions,
+            },
         )
-        
+
         data = response.json()
         print(f"✅ Response: {json.dumps(data, indent=2)}")
-        
+
         if data.get("function_call"):
             print(f"\n🔧 Function Called: {data['function_call']['name']}")
             print(f"📝 Arguments: {data['function_call']['arguments']}")
@@ -53,7 +53,7 @@ async def test_calculator():
 async def test_database_query():
     """Test database query function (requires webhook endpoint)"""
     print("\n🧪 Testing Database Query Function...")
-    
+
     functions = [
         {
             "name": "sendPersonaImage",
@@ -63,18 +63,18 @@ async def test_database_query():
                 "properties": {
                     "personaId": {
                         "type": "string",
-                        "description": "The ID of the persona"
+                        "description": "The ID of the persona",
                     },
                     "limit": {
                         "type": "number",
-                        "description": "Maximum number of images"
-                    }
+                        "description": "Maximum number of images",
+                    },
                 },
-                "required": ["personaId"]
-            }
+                "required": ["personaId"],
+            },
         }
     ]
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             "http://localhost:8000/api/llm/generate",
@@ -85,13 +85,13 @@ async def test_database_query():
                 "functions": functions,
                 "persona_id": "xyz-123",
                 "user_id": "user-456",
-                "webhook_url": "http://localhost:3000/webhooks/ai-gateway/database-query"
-            }
+                "webhook_url": "http://localhost:3000/webhooks/ai-gateway/database-query",
+            },
         )
-        
+
         data = response.json()
         print(f"✅ Response: {json.dumps(data, indent=2)}")
-        
+
         if data.get("function_call"):
             print(f"\n🔧 Function Called: {data['function_call']['name']}")
             print(f"📝 Arguments: {data['function_call']['arguments']}")
@@ -103,17 +103,17 @@ async def test_database_query():
 async def test_no_functions():
     """Test standard generation without functions"""
     print("\n🧪 Testing Standard Generation (No Functions)...")
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             "http://localhost:8000/api/llm/generate",
             json={
                 "prompt": "What is 2 + 2?",
                 "llm_provider": "vertexai",
-                "model": "models/gemini-2.0-flash"
-            }
+                "model": "models/gemini-2.0-flash",
+            },
         )
-        
+
         data = response.json()
         print(f"✅ Response: {data.get('response', 'No response')[:200]}...")
         print(f"📊 Provider: {data.get('provider')}")
@@ -124,30 +124,31 @@ async def main():
     """Run all tests"""
     print("🚀 Function Calling Tests\n")
     print("=" * 60)
-    
+
     try:
         # Test 1: Calculator
         await test_calculator()
-        
+
         print("\n" + "=" * 60)
-        
+
         # Test 2: Database query (may fail if webhook not running)
         try:
             await test_database_query()
         except Exception as e:
             print(f"⚠️  Database query test failed (webhook may not be running): {e}")
-        
+
         print("\n" + "=" * 60)
-        
+
         # Test 3: Standard generation
         await test_no_functions()
-        
+
         print("\n" + "=" * 60)
         print("\n✅ All tests completed!")
-        
+
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 
