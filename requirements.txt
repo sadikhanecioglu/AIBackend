@@ -8,7 +8,7 @@ python-dotenv>=1.0.0
 pydantic>=2.6.0
 
 # LLM Provider Factory with all providers
-llm-provider-factory[all]==0.6.0
+llm-provider-factory[all]==0.7.3
 
 # HTTP and WebSocket
 websockets>=13.0

@@ -12,8 +12,13 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install ALL Python dependencies (including llm-provider-factory)
 RUN pip install --no-cache-dir -r requirements.txt
+
+# 🔥 Override with LOCAL llm-provider-factory (with debug logs and fixes)
+COPY llmfactory-clean/ /tmp/llm-provider/
+RUN pip install --no-cache-dir --force-reinstall /tmp/llm-provider/ && \
+    rm -rf /tmp/llm-provider
 
 # Create credentials directory
 RUN mkdir -p /app/credentials
