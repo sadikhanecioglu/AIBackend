@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 from app.config.manager import ConfigManager
 from app.config.models import AIGatewayConfig
-from app.api.routes import health, llm, image, providers, websocket, stt
+from app.api.routes import health, llm, image, providers, websocket, stt, callagent
 from app.core.exceptions import setup_exception_handlers
 
 # Load environment variables
@@ -96,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(image.router, prefix="/api/image", tags=["Image"])
     app.include_router(stt.router, prefix="/api/stt", tags=["Speech-to-Text"])
     app.include_router(websocket.router, tags=["WebSocket"])
+    app.include_router(callagent.router, prefix="/api/callagent", tags=["Call Agent"])
 
     return app
 
@@ -131,15 +132,11 @@ def main():
   python -m app.main
   
   # Custom port
-  python -m app.main --port 8080
+  python -m app.main --port 3000
 ===============================
     """
     )
 
     uvicorn.run(
-        "app.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
+        "app.main:app", host="0.0.0.0", port=3000, reload=True, log_level="info"
     )
-
-
-if __name__ == "__main__":
-    main()

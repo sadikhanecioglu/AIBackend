@@ -82,6 +82,14 @@ class ConfigManager:
             env_config["google_api_key"] = os.getenv("GOOGLE_API_KEY")
         if os.getenv("REPLICATE_API_TOKEN"):
             env_config["replicate_api_token"] = os.getenv("REPLICATE_API_TOKEN")
+        if os.getenv("ELEVENLABS_API_KEY"):
+            env_config["elevenlabs_api_key"] = os.getenv("ELEVENLABS_API_KEY")
+        if os.getenv("ELEVENLABS_AGENT_ID"):
+            env_config["elevenlabs_agent_id"] = os.getenv("ELEVENLABS_AGENT_ID")
+        if os.getenv("ELEVENLABS_SIGNED_URL_ENDPOINT"):
+            env_config["elevenlabs_signed_url_endpoint"] = os.getenv(
+                "ELEVENLABS_SIGNED_URL_ENDPOINT"
+            )
         if os.getenv("AZURE_OPENAI_API_KEY"):
             env_config["azure_openai_api_key"] = os.getenv("AZURE_OPENAI_API_KEY")
         if os.getenv("AZURE_OPENAI_ENDPOINT"):
@@ -98,6 +106,24 @@ class ConfigManager:
             env_config["vertexai_project_id"] = os.getenv("VERTEXAI_PROJECT_ID")
         if os.getenv("VERTEXAI_MODEL"):
             env_config["vertexai_model"] = os.getenv("VERTEXAI_MODEL")
+
+        # Asterisk ARI settings
+        if os.getenv("ARI_URL"):
+            env_config["ari_url"] = os.getenv("ARI_URL")
+        if os.getenv("ARI_USERNAME"):
+            env_config["ari_username"] = os.getenv("ARI_USERNAME")
+        if os.getenv("ARI_PASSWORD"):
+            env_config["ari_password"] = os.getenv("ARI_PASSWORD")
+        if os.getenv("ARI_TRUNK"):
+            env_config["ari_trunk"] = os.getenv("ARI_TRUNK")
+        if os.getenv("ARI_CONTEXT"):
+            env_config["ari_context"] = os.getenv("ARI_CONTEXT")
+        if os.getenv("ARI_EXTENSION"):
+            env_config["ari_extension"] = os.getenv("ARI_EXTENSION")
+        if os.getenv("ARI_PRIORITY"):
+            env_config["ari_priority"] = int(os.getenv("ARI_PRIORITY"))
+        if os.getenv("ARI_TIMEOUT"):
+            env_config["ari_timeout"] = int(os.getenv("ARI_TIMEOUT"))
 
         # Numeric settings
         if os.getenv("MAX_SESSIONS"):
@@ -128,6 +154,8 @@ class ConfigManager:
                 "azure_openai_api_key",
                 "azure_speech_key",
                 "vertexai_service_account_json",
+                "elevenlabs_api_key",
+                "ari_password",
             ]
             for key in sensitive_keys:
                 config_dict.pop(key, None)
@@ -175,6 +203,8 @@ class ConfigManager:
             "azure_openai_api_key",
             "azure_speech_key",
             "vertexai_service_account_json",
+            "elevenlabs_api_key",
+            "ari_password",
         ]
 
         for key in sensitive_keys:

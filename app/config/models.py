@@ -38,6 +38,23 @@ class AIGatewayConfig:
     ollama_base_url: Optional[str] = "http://localhost:11434"  # Default Ollama server
     ollama_model: Optional[str] = "llama3.1:latest"  # Default Ollama model
 
+    # ElevenLabs ConvAI settings
+    elevenlabs_api_key: Optional[str] = None
+    elevenlabs_agent_id: Optional[str] = None
+    elevenlabs_signed_url_endpoint: str = (
+        "https://api.elevenlabs.io/v1/convai/conversation/get-signed-url"
+    )
+
+    # Asterisk ARI settings
+    ari_url: Optional[str] = None
+    ari_username: Optional[str] = None
+    ari_password: Optional[str] = None
+    ari_trunk: Optional[str] = None
+    ari_context: Optional[str] = "outbound-bot"
+    ari_extension: Optional[str] = "s"
+    ari_priority: int = 1
+    ari_timeout: int = 30
+
     # STT Provider settings
     assemblyai_api_key: Optional[str] = None
     deepgram_api_key: Optional[str] = None
@@ -90,6 +107,17 @@ class AIGatewayConfig:
             "replicate_api_token": self.replicate_api_token,
             "ollama_base_url": self.ollama_base_url,
             "ollama_model": self.ollama_model,
+            "elevenlabs_api_key": self.elevenlabs_api_key,
+            "elevenlabs_agent_id": self.elevenlabs_agent_id,
+            "elevenlabs_signed_url_endpoint": self.elevenlabs_signed_url_endpoint,
+            "ari_url": self.ari_url,
+            "ari_username": self.ari_username,
+            "ari_password": self.ari_password,
+            "ari_trunk": self.ari_trunk,
+            "ari_context": self.ari_context,
+            "ari_extension": self.ari_extension,
+            "ari_priority": self.ari_priority,
+            "ari_timeout": self.ari_timeout,
             "max_sessions": self.max_sessions,
             "session_timeout": self.session_timeout,
             "audio_sample_rate": self.audio_sample_rate,
