@@ -9,7 +9,7 @@ pydantic>=2.6.0
 
 # LLM Provider Factory with all providers
 llm-provider-factory[all]==0.7.3
-
+twilio==9.8.7
 # HTTP and WebSocket
 websockets>=13.0
 httpx>=0.28.1

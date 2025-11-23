@@ -107,6 +107,51 @@ class ConfigManager:
         if os.getenv("VERTEXAI_MODEL"):
             env_config["vertexai_model"] = os.getenv("VERTEXAI_MODEL")
 
+        # Twilio settings
+        if os.getenv("TWILIO_ACCOUNT_SID"):
+            env_config["twilio_account_sid"] = os.getenv("TWILIO_ACCOUNT_SID")
+        if os.getenv("TWILIO_AUTH_TOKEN"):
+            env_config["twilio_auth_token"] = os.getenv("TWILIO_AUTH_TOKEN")
+        if os.getenv("TWILIO_API_KEY"):
+            env_config["twilio_api_key"] = os.getenv("TWILIO_API_KEY")
+        if os.getenv("TWILIO_API_SECRET"):
+            env_config["twilio_api_secret"] = os.getenv("TWILIO_API_SECRET")
+        if os.getenv("TWILIO_PHONE_NUMBER"):
+            env_config["twilio_from_number"] = os.getenv("TWILIO_PHONE_NUMBER")
+        if os.getenv("TWILIO_REGION"):
+            env_config["twilio_region"] = os.getenv("TWILIO_REGION")
+        if os.getenv("TWILIO_EDGE"):
+            env_config["twilio_edge"] = os.getenv("TWILIO_EDGE")
+        if os.getenv("TWILIO_STREAM_URL"):
+            env_config["twilio_stream_url"] = os.getenv("TWILIO_STREAM_URL")
+        if os.getenv("TWILIO_STREAM_HOST"):
+            env_config["twilio_stream_host"] = os.getenv("TWILIO_STREAM_HOST")
+        if os.getenv("TWILIO_STATUS_CALLBACK_URL"):
+            env_config["twilio_status_callback_url"] = os.getenv(
+                "TWILIO_STATUS_CALLBACK_URL"
+            )
+        if os.getenv("TWILIO_STATUS_CALLBACK_METHOD"):
+            env_config["twilio_status_callback_method"] = os.getenv(
+                "TWILIO_STATUS_CALLBACK_METHOD"
+            )
+        if os.getenv("TWILIO_STATUS_CALLBACK_EVENTS"):
+            raw_events = os.getenv("TWILIO_STATUS_CALLBACK_EVENTS", "")
+            env_config["twilio_status_callback_events"] = [
+                event.strip() for event in raw_events.split(",") if event.strip()
+            ]
+        if os.getenv("TWILIO_DEFAULT_COMPANY_ID"):
+            env_config["twilio_default_company_id"] = os.getenv(
+                "TWILIO_DEFAULT_COMPANY_ID"
+            )
+        if os.getenv("TWILIO_DEFAULT_AGENT_ID"):
+            env_config["twilio_default_agent_id"] = os.getenv("TWILIO_DEFAULT_AGENT_ID")
+        if os.getenv("TWILIO_DEFAULT_PROMPT"):
+            env_config["twilio_default_prompt"] = os.getenv("TWILIO_DEFAULT_PROMPT")
+        if os.getenv("TWILIO_DEFAULT_FIRST_MESSAGE"):
+            env_config["twilio_default_first_message"] = os.getenv(
+                "TWILIO_DEFAULT_FIRST_MESSAGE"
+            )
+
         # Asterisk ARI settings
         if os.getenv("ARI_URL"):
             env_config["ari_url"] = os.getenv("ARI_URL")
@@ -156,6 +201,8 @@ class ConfigManager:
                 "vertexai_service_account_json",
                 "elevenlabs_api_key",
                 "ari_password",
+                "twilio_auth_token",
+                "twilio_api_secret",
             ]
             for key in sensitive_keys:
                 config_dict.pop(key, None)
@@ -205,6 +252,8 @@ class ConfigManager:
             "vertexai_service_account_json",
             "elevenlabs_api_key",
             "ari_password",
+            "twilio_auth_token",
+            "twilio_api_secret",
         ]
 
         for key in sensitive_keys:

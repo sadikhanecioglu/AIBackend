@@ -55,6 +55,24 @@ class AIGatewayConfig:
     ari_priority: int = 1
     ari_timeout: int = 30
 
+    # Twilio settings
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_api_key: Optional[str] = None
+    twilio_api_secret: Optional[str] = None
+    twilio_from_number: Optional[str] = None
+    twilio_region: Optional[str] = None
+    twilio_edge: Optional[str] = None
+    twilio_stream_url: Optional[str] = None
+    twilio_stream_host: Optional[str] = None
+    twilio_status_callback_url: Optional[str] = None
+    twilio_status_callback_method: Optional[str] = None
+    twilio_status_callback_events: List[str] = field(default_factory=list)
+    twilio_default_company_id: Optional[str] = None
+    twilio_default_agent_id: Optional[str] = None
+    twilio_default_prompt: Optional[str] = None
+    twilio_default_first_message: Optional[str] = None
+
     # STT Provider settings
     assemblyai_api_key: Optional[str] = None
     deepgram_api_key: Optional[str] = None
@@ -118,6 +136,22 @@ class AIGatewayConfig:
             "ari_extension": self.ari_extension,
             "ari_priority": self.ari_priority,
             "ari_timeout": self.ari_timeout,
+            "twilio_account_sid": self.twilio_account_sid,
+            "twilio_auth_token": self.twilio_auth_token,
+            "twilio_api_key": self.twilio_api_key,
+            "twilio_api_secret": self.twilio_api_secret,
+            "twilio_from_number": self.twilio_from_number,
+            "twilio_region": self.twilio_region,
+            "twilio_edge": self.twilio_edge,
+            "twilio_stream_url": self.twilio_stream_url,
+            "twilio_stream_host": self.twilio_stream_host,
+            "twilio_status_callback_url": self.twilio_status_callback_url,
+            "twilio_status_callback_method": self.twilio_status_callback_method,
+            "twilio_status_callback_events": self.twilio_status_callback_events,
+            "twilio_default_company_id": self.twilio_default_company_id,
+            "twilio_default_agent_id": self.twilio_default_agent_id,
+            "twilio_default_prompt": self.twilio_default_prompt,
+            "twilio_default_first_message": self.twilio_default_first_message,
             "max_sessions": self.max_sessions,
             "session_timeout": self.session_timeout,
             "audio_sample_rate": self.audio_sample_rate,
