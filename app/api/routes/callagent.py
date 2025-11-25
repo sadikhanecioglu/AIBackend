@@ -5,20 +5,24 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import copy
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from xml.etree import ElementTree as ET
 
 import aiohttp
+from fastapi.params import Query
 import websockets
 from fastapi import (
     APIRouter,
     HTTPException,
     Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -34,9 +38,11 @@ from app.config.models import AIGatewayConfig
 try:  # Twilio SDK is optional until outbound calls are used
     from twilio.base.exceptions import TwilioRestException  # type: ignore[import]
     from twilio.rest import Client as TwilioClient  # type: ignore[import]
+    from twilio.twiml.voice_response import VoiceResponse  # type: ignore[import]
 except ImportError:  # pragma: no cover - optional dependency
     TwilioClient = None  # type: ignore
     TwilioRestException = None  # type: ignore
+    VoiceResponse = None  # type: ignore
 
 
 class AriCallRequest(BaseModel):
@@ -186,6 +192,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+CALL_START_ENDPOINT = "https://bcc71cc0adb2.ngrok-free.app/calls/start-call"
+CALL_ACCEPT_ENDPOINT = "https://bcc71cc0adb2.ngrok-free.app/calls/accept-call"
+CALL_END_ENDPOINT = "https://bcc71cc0adb2.ngrok-free.app/calls/end-call"
+
+
 @dataclass
 class CallAgentContext:
     """Represents metadata passed along with the call."""
@@ -201,6 +212,10 @@ class CallAgentContext:
     llm_provider: Optional[str] = None
     call_status_hook: Optional[str] = None
     call_end_hook: Optional[str] = None
+    callid: Optional[str] = None
+    elevenlabs_api_key: Optional[str] = None
+    conversation_id: Optional[str] = None
+    started_at: Optional[float] = None
 
     @classmethod
     def from_websocket(
@@ -210,8 +225,11 @@ class CallAgentContext:
 
         to_number = params.get("exten", "").strip()
         from_number = params.get("caller", "").strip()
+        callid = params.get("callid", "").strip()
+        api_key = params.get("ElevenLabsApiKey") or params.get("elevenlabsApiKey")
 
         return cls(
+            callid=callid,
             to_number=to_number,
             from_number=from_number,
             first_message=params.get("FirstMessage"),
@@ -223,6 +241,7 @@ class CallAgentContext:
             llm_provider=params.get("LlmProvider"),
             call_status_hook=params.get("CallStatusHook"),
             call_end_hook=params.get("CallEndHook"),
+            elevenlabs_api_key=api_key,
         )
 
     def is_valid(self) -> bool:
@@ -230,6 +249,7 @@ class CallAgentContext:
 
     def to_payload(self) -> Dict[str, Optional[str]]:
         return {
+            "CallId": self.callid,
             "ToNumber": self.to_number,
             "FromNumber": self.from_number,
             "FirstMessage": self.first_message,
@@ -241,6 +261,7 @@ class CallAgentContext:
             "LlmProvider": self.llm_provider,
             "CallStatusHook": self.call_status_hook,
             "CallEndHook": self.call_end_hook,
+            "ConversationId": self.conversation_id,
         }
 
 
@@ -402,6 +423,108 @@ async def originate_twilio_call(
     return response_payload
 
 
+@router.post("/twilio/inbound")
+async def handle_twilio_inbound_call(request: Request) -> Response:
+    """Handle inbound Twilio webhooks and return TwiML to start media streaming."""
+
+    config = _get_config_from_request(request)
+
+    form = await request.form()
+    call_sid = form.get("CallSid")
+    from_number_raw = form.get("From") or ""
+    to_number_raw = form.get("To") or ""
+
+    normalized_from = _normalize_phone_number(str(from_number_raw))
+    normalized_to = _normalize_phone_number(str(to_number_raw))
+
+    call_id = call_sid or str(uuid.uuid4())
+    external_call_id = await _fetch_external_call_id(
+        normalized_from, normalized_to, "twilio", "inbound"
+    )
+    if external_call_id:
+        call_id = external_call_id
+
+    query_params = request.query_params
+    agent_override = (
+        query_params.get("agentId")
+        or query_params.get("agent")
+        or config.twilio_default_agent_id
+        or config.elevenlabs_agent_id
+    )
+    company_id = query_params.get("companyId") or config.twilio_default_company_id
+    call_status_hook = query_params.get("callStatusHook")
+    call_end_hook = query_params.get("callEndHook")
+    conversation_data: Optional[Dict[str, Any]] = None
+    conversation_raw = query_params.get(
+        "conversationInitiationClientData"
+    ) or query_params.get("conversation_initiation_client_data")
+    if conversation_raw:
+        try:
+            conversation_data = json.loads(conversation_raw)
+        except json.JSONDecodeError:
+            logger.warning(
+                "Ignoring invalid conversation initiation payload for call %s",
+                call_id,
+            )
+
+    stream_url = _resolve_twilio_stream_url(
+        request,
+        call_id,
+        query_params.get("streamUrl"),
+        query_params.get("streamHost"),
+        config.twilio_stream_url,
+        config.twilio_stream_host,
+    )
+
+    stream_parameters: Dict[str, Any] = {
+        "agent": agent_override,
+        "toNumber": normalized_to,
+        "fromNumber": normalized_from,
+        "ditacallid": call_id,
+        "callId": call_id,
+        "companyId": company_id,
+        "callStatusHook": call_status_hook,
+        "callEndHook": call_end_hook,
+        "callSid": call_sid,
+    }
+
+    if conversation_data is not None:
+        stream_parameters["conversation_initiation_client_data"] = json.dumps(
+            conversation_data
+        )
+
+    stream_parameters = {
+        key: value
+        for key, value in stream_parameters.items()
+        if value not in (None, "")
+    }
+
+    twiml = _build_twilio_twiml(stream_url, stream_parameters)
+
+    if call_status_hook:
+        asyncio.create_task(
+            notify_hook(
+                call_status_hook,
+                {
+                    "event": "call_received",
+                    "call_id": call_id,
+                    "call_sid": call_sid,
+                    "from": normalized_from,
+                    "to": normalized_to,
+                },
+            )
+        )
+
+    logger.info(
+        "Inbound Twilio call %s received (from=%s to=%s)",
+        call_id,
+        normalized_from,
+        normalized_to,
+    )
+
+    return Response(content=twiml, media_type="text/xml")
+
+
 @dataclass
 class TwilioCallSession:
     """Represents an active Twilio streaming session."""
@@ -416,6 +539,7 @@ class TwilioCallSession:
     end_hook: Optional[str] = None
     agent: Optional[str] = None
     conversation_id: Optional[str] = None
+    started_at: Optional[float] = None
 
 
 # Track active Twilio sockets by call identifier
@@ -429,6 +553,125 @@ def _get_twilio_lock() -> asyncio.Lock:
     if _twilio_active_lock is None:
         _twilio_active_lock = asyncio.Lock()
     return _twilio_active_lock
+
+
+async def _fetch_external_call_id(
+    from_number: str, to_number: str, provider: str, type: str
+) -> Optional[str]:
+    if not CALL_START_ENDPOINT:
+        return None
+
+    params = {
+        "fromNumber": from_number,
+        "toNumber": to_number,
+        "provider": provider,
+        "type": type,
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                CALL_START_ENDPOINT, params=params, timeout=10
+            ) as response:
+                if response.status >= 400:
+                    logger.warning(
+                        "Call start endpoint error (%s) for from=%s to=%s",
+                        response.status,
+                        from_number,
+                        to_number,
+                    )
+                    return None
+
+                raw_text = await response.text()
+                try:
+                    data = json.loads(raw_text)
+                except json.JSONDecodeError:
+                    candidate = raw_text.strip()
+                    return candidate or None
+
+                for key in ("callId", "call_id", "id"):
+                    if key in data and data[key] not in (None, ""):
+                        return str(data[key])
+
+                nested = data.get("data") if isinstance(data, dict) else None
+                if isinstance(nested, dict):
+                    for key in ("callId", "call_id", "id"):
+                        if key in nested and nested[key] not in (None, ""):
+                            return str(nested[key])
+
+                logger.warning("Call start endpoint response missing call id: %s", data)
+                return None
+
+    except Exception as exc:  # pragma: no cover - network failure best effort
+        logger.warning(
+            "Call start endpoint request failed for from=%s to=%s: %s",
+            from_number,
+            to_number,
+            exc,
+        )
+        return None
+
+
+async def _accept_external_call(
+    call_id: Optional[str],
+) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    if not call_id:
+        logger.warning("accept-call skipped because call_id is missing")
+        return False, None
+
+    if not CALL_ACCEPT_ENDPOINT:
+        logger.warning("accept-call endpoint is not configured")
+        return False, None
+
+    params = {"callId": call_id}
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                CALL_ACCEPT_ENDPOINT,
+                params=params,
+                timeout=10,
+            ) as response:
+                if response.status >= 400:
+                    logger.warning(
+                        "Call accept endpoint error (%s) for call_id=%s",
+                        response.status,
+                        call_id,
+                    )
+                    return False, None
+
+                raw_text = await response.text()
+                try:
+                    payload = json.loads(raw_text)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Call accept endpoint returned non-JSON payload for call_id=%s",
+                        call_id,
+                    )
+                    return False, None
+
+                success = bool(payload.get("success", False))
+                data = payload.get("data") if isinstance(payload, dict) else None
+
+                if not success:
+                    return False, data if isinstance(data, dict) else None
+
+                if data is not None and not isinstance(data, dict):
+                    logger.warning(
+                        "Call accept endpoint data is not a JSON object for call_id=%s",
+                        call_id,
+                    )
+                    return False, None
+
+                return True, data
+
+    except Exception as exc:  # pragma: no cover - network failure best effort
+        logger.warning(
+            "Call accept endpoint request failed for call_id=%s: %s",
+            call_id,
+            exc,
+        )
+        return False, None
 
 
 def _build_twilio_twiml(stream_url: str, parameters: Dict[str, str]) -> str:
@@ -457,6 +700,18 @@ def _normalize_phone_number(number: str) -> str:
     if trimmed.startswith("+"):
         return trimmed
     return f"+{trimmed}"
+
+
+def _extract_destination_from_endpoint(endpoint: Optional[str]) -> Optional[str]:
+    if not endpoint:
+        return None
+
+    segment = endpoint.strip().split("/")[-1]
+    if "@" in segment:
+        segment = segment.split("@", maxsplit=1)[0]
+
+    segment = segment.strip()
+    return segment or None
 
 
 def _resolve_twilio_stream_url(
@@ -521,6 +776,39 @@ async def notify_hook(url: Optional[str], payload: Dict[str, Any]) -> None:
         logger.warning("Call agent hook notification failed: %s", exc)
 
 
+async def notify_external_call_end(
+    call_id: Optional[str],
+    conversation_id: Optional[str],
+    call_sid: Optional[str],
+    duration_seconds: Optional[float],
+) -> None:
+    if not call_id or not CALL_END_ENDPOINT:
+        return
+
+    params = {"callId": call_id}
+    payload = {"callId": call_id, "source": "sipturnk"}
+
+    if conversation_id:
+        payload["conversationId"] = conversation_id
+    if call_sid:
+        payload["callSid"] = call_sid
+    if duration_seconds is not None:
+        payload["durationSeconds"] = round(float(duration_seconds), 3)
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            await session.post(
+                CALL_END_ENDPOINT,
+                params=params,
+                json=payload,
+                timeout=10,
+            )
+    except Exception as exc:  # pragma: no cover - best effort notification
+        logger.warning(
+            "External call end notification failed for call_id=%s: %s", call_id, exc
+        )
+
+
 class ElevenLabsClient:
     """Thin wrapper around ElevenLabs ConvAI WebSocket client."""
 
@@ -535,7 +823,8 @@ class ElevenLabsClient:
         )
 
     async def _get_signed_url(self, agent_id: Optional[str]) -> str:
-        if not self._config.elevenlabs_api_key:
+        api_key = self._context.elevenlabs_api_key or self._config.elevenlabs_api_key
+        if not api_key:
             raise RuntimeError("ElevenLabs API key is not configured")
         if not agent_id:
             raise RuntimeError("ElevenLabs agent ID is not configured")
@@ -543,7 +832,7 @@ class ElevenLabsClient:
         endpoint = self._config.elevenlabs_signed_url_endpoint
         url = f"{endpoint}?agent_id={agent_id}"
         headers = {
-            "xi-api-key": self._config.elevenlabs_api_key,
+            "xi-api-key": api_key,
             "accept": "application/json",
         }
 
@@ -582,20 +871,65 @@ class ElevenLabsClient:
             max_size=10 * 1024 * 1024,
         )
 
-        initiation_payload: Dict[str, Any] = {
-            "type": "conversation_initiation_client_data",
-            "conversation_config_override": {"tts": {"output_format": "ulaw_8000"}},
+        base_override: Dict[str, Any] = {
+            "agent": {},
+            "tts": {"output_format": "ulaw_8000"},
         }
 
-        if self._context.prompt:
-            initiation_payload["conversation_config_override"]["conversation"] = {
-                "voice_prompt": self._context.prompt
-            }
+        payload_override: Dict[str, Any] = {}
+        client_data: Dict[str, Any] = {}
 
         if conversation_data:
-            initiation_payload["conversation_initiation_client_data"] = (
-                conversation_data
-            )
+            payload_override = conversation_data.get("conversation_config_override", {})
+            client_data = {
+                key: value
+                for key, value in conversation_data.items()
+                if key != "conversation_config_override"
+            }
+
+        conversation_override = copy.deepcopy(base_override)
+        for key, value in payload_override.items():
+            existing = conversation_override.get(key)
+            if isinstance(existing, dict) and isinstance(value, dict):
+                existing.update(value)
+            else:
+                conversation_override[key] = value
+
+        agent_override = conversation_override.setdefault("agent", {})
+        if not isinstance(agent_override, dict):
+            agent_override = {"value": agent_override}
+            conversation_override["agent"] = agent_override
+
+        if self._context.prompt:
+            prompt_entry = agent_override.get("prompt")
+            if prompt_entry is None:
+                agent_override["prompt"] = {"prompt": self._context.prompt}
+            elif isinstance(prompt_entry, dict):
+                prompt_entry.setdefault("prompt", self._context.prompt)
+            else:
+                agent_override["prompt"] = {
+                    "prompt": prompt_entry or self._context.prompt
+                }
+
+        if self._context.first_message and not agent_override.get("first_message"):
+            agent_override["first_message"] = self._context.first_message
+
+        tts_override = conversation_override.setdefault("tts", {})
+        if not isinstance(tts_override, dict):
+            tts_override = {"value": tts_override}
+            conversation_override["tts"] = tts_override
+        tts_override.setdefault("output_format", "ulaw_8000")
+
+        if self._context.callid:
+            client_data.setdefault("callId", self._context.callid)
+
+        initiation_payload: Dict[str, Any] = {
+            "type": "conversation_initiation_client_data",
+            "conversation_config_override": conversation_override,
+        }
+
+        if client_data:
+            initiation_payload["conversation_initiation_client_data"] = client_data
 
         if agent_id and self._context.agent_id != agent_id:
             self._context.agent_id = agent_id
@@ -682,6 +1016,23 @@ class ElevenLabsClient:
                         data.get("user_transcription_event", {}).get("user_transcript"),
                     )
 
+                elif event_type == "conversation_initiation_metadata":
+                    conversation_event = data.get(
+                        "conversation_initiation_metadata_event", {}
+                    )
+                    conversation_id = conversation_event.get("conversation_id")
+                    if not conversation_id:
+                        conversation_id = conversation_event.get(
+                            "conversation", {}
+                        ).get("id")
+
+                    if conversation_id:
+                        self._context.conversation_id = conversation_id
+                        logger.info(
+                            "ElevenLabs conversation initiated for call %s",
+                            self._context.callid,
+                        )
+
                 else:
                     logger.debug("Unhandled ElevenLabs event: %s", event_type)
 
@@ -731,8 +1082,16 @@ class ElevenLabsClient:
                             clear_msg["streamSid"] = stream_sid
                         await websocket.send_text(json.dumps(clear_msg))
 
-                elif event_type == "conversation_initiation":
-                    conversation_event = data.get("conversation_initiation_event", {})
+                elif event_type in {
+                    "conversation_initiation",
+                    "conversation_initiation_metadata",
+                }:
+                    event_key = (
+                        "conversation_initiation_event"
+                        if event_type == "conversation_initiation"
+                        else "conversation_initiation_metadata_event"
+                    )
+                    conversation_event = data.get(event_key, {})
                     conversation_id = conversation_event.get("conversation_id")
                     if not conversation_id:
                         conversation_id = conversation_event.get(
@@ -755,9 +1114,16 @@ class ElevenLabsClient:
                                     )
                                 )
 
-                    logger.info(
-                        "ElevenLabs conversation initiated for call %s", call_id
-                    )
+                        logger.info(
+                            "ElevenLabs conversation initiated for call %s (conversation_id=%s)",
+                            call_id,
+                            conversation_id,
+                        )
+                    else:
+                        logger.info(
+                            "ElevenLabs conversation initiation event received for call %s but no conversation_id present",
+                            call_id,
+                        )
 
                 elif event_type == "agent_response":
                     logger.info(
@@ -860,6 +1226,37 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                 status_hook = custom_params.get("callStatusHook")
                 end_hook = custom_params.get("callEndHook")
 
+                accept_success, accept_data = await _accept_external_call(call_id)
+                if not accept_success:
+                    await websocket.send_text(
+                        json.dumps({"error": "Call could not be accepted"})
+                    )
+                    await websocket.close(code=4003, reason="Call not accepted")
+                    return
+
+                if accept_data:
+                    first_message_override = accept_data.get("firstMessage")
+                    if first_message_override:
+                        custom_params["FirstMessage"] = first_message_override
+                        custom_params["firstMessage"] = first_message_override
+
+                    prompt_override = accept_data.get("prompt")
+                    if prompt_override:
+                        custom_params["Prompt"] = prompt_override
+                        custom_params["prompt"] = prompt_override
+
+                    agent_override = accept_data.get("agentId")
+                    if agent_override:
+                        custom_params["agent"] = agent_override
+
+                    api_key_override = accept_data.get("elevenlabsApiKey")
+                    if api_key_override:
+                        custom_params["elevenlabsApiKey"] = api_key_override
+                else:
+                    api_key_override = None
+
+                logger.info("External service accepted Twilio call %s", call_id)
+
                 conversation_data_raw = custom_params.get(
                     "conversation_initiation_client_data"
                 ) or custom_params.get("conversationInitiationClientData")
@@ -885,6 +1282,7 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                     status_hook=status_hook,
                     end_hook=end_hook,
                     agent=custom_params.get("agent"),
+                    started_at=time.monotonic(),
                 )
 
                 twilio_sessions[call_id] = session
@@ -919,6 +1317,7 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                 )
 
                 call_context = CallAgentContext(
+                    callid=call_id,
                     to_number=session.to_number or "",
                     from_number=session.from_number or "",
                     first_message=first_message,
@@ -930,6 +1329,8 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                     llm_provider=llm_provider,
                     call_status_hook=session.status_hook,
                     call_end_hook=session.end_hook,
+                    elevenlabs_api_key=api_key_override
+                    or custom_params.get("elevenlabsApiKey"),
                 )
 
                 eleven_client = ElevenLabsClient(config, call_context)
@@ -1013,18 +1414,37 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
 
             session = twilio_sessions.pop(call_id, None) or session
 
-            if session and session.end_hook:
-                asyncio.create_task(
-                    notify_hook(
-                        session.end_hook,
-                        {
-                            "event": "call_ended",
-                            "call_id": call_id,
-                            "stream_sid": session.stream_sid,
-                            "conversation_id": session.conversation_id,
-                        },
+            duration_seconds: Optional[float] = None
+            call_sid: Optional[str] = None
+            conversation_id: Optional[str] = None
+
+            if session:
+                call_sid = session.call_sid
+                conversation_id = session.conversation_id
+                if session.started_at is not None:
+                    duration_seconds = max(0.0, time.monotonic() - session.started_at)
+
+                if session.end_hook:
+                    asyncio.create_task(
+                        notify_hook(
+                            session.end_hook,
+                            {
+                                "event": "call_ended",
+                                "call_id": call_id,
+                                "stream_sid": session.stream_sid,
+                                "conversation_id": conversation_id,
+                            },
+                        )
                     )
+
+            asyncio.create_task(
+                notify_external_call_end(
+                    call_id=call_id,
+                    conversation_id=conversation_id,
+                    call_sid=call_sid,
+                    duration_seconds=duration_seconds,
                 )
+            )
 
         if session is None and call_id:
             twilio_sessions.pop(call_id, None)
@@ -1083,10 +1503,25 @@ async def originate_ari_call(
 
     caller_id = payload.caller_id or payload.from_number
 
+    dialed_number = payload.to_number or _extract_destination_from_endpoint(endpoint)
+    if not dialed_number and extension:
+        dialed_number = extension
+
+    channel_variables: Dict[str, str] = {
+        key: str(value) for key, value in (payload.variables or {}).items()
+    }
+
+    if dialed_number:
+        channel_variables.setdefault("CALL_AGENT_TO", str(dialed_number))
+
+    default_from = payload.from_number or caller_id or ""
+    if default_from:
+        channel_variables.setdefault("CALL_AGENT_FROM", str(default_from))
+
     variables_param = None
-    if payload.variables:
+    if channel_variables:
         variables_param = ",".join(
-            f"{key}={str(value)}" for key, value in payload.variables.items()
+            f"{key}={value}" for key, value in channel_variables.items()
         )
 
     params = {
@@ -1096,8 +1531,8 @@ async def originate_ari_call(
         "priority": str(priority),
         "timeout": str(timeout),
     }
-    if caller_id:
-        params["callerId"] = caller_id
+    if payload.to_number:
+        params["callerId"] = payload.to_number
     if variables_param:
         params["variables"] = variables_param
 
@@ -1193,13 +1628,47 @@ async def call_agent_bridge(
         await websocket.close(code=1008)
         return
 
+    if not context.callid:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "Call identifier (callid) is required",
+            }
+        )
+        await websocket.close(code=1008)
+        return
+
+    accept_success, accept_data = await _accept_external_call(context.callid)
+    if not accept_success:
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "Call could not be accepted",
+            }
+        )
+        await websocket.close(code=1011)
+        return
+
+    if accept_data:
+        context.first_message = accept_data.get("firstMessage") or context.first_message
+        context.prompt = accept_data.get("prompt") or context.prompt
+        context.agent_id = accept_data.get("agentId") or context.agent_id
+        context.elevenlabs_api_key = (
+            accept_data.get("elevenlabsApiKey") or context.elevenlabs_api_key
+        )
+
+    logger.info("External service accepted ARI call %s", context.callid)
+
     await websocket.send_json(
         {
             "type": "call_context",
+            "CallId": context.callid,
             "ToNumber": context.to_number,
             "FromNumber": context.from_number,
         }
     )
+
+    context.started_at = time.monotonic()
 
     asyncio.create_task(
         notify_hook(
@@ -1276,6 +1745,19 @@ async def call_agent_bridge(
         listener_task.cancel()
         await eleven_client.close()
 
+        duration_seconds: Optional[float] = None
+        if context.started_at is not None:
+            duration_seconds = max(0.0, time.monotonic() - context.started_at)
+
+        asyncio.create_task(
+            notify_external_call_end(
+                call_id=context.callid,
+                conversation_id=context.conversation_id,
+                call_sid=None,
+                duration_seconds=duration_seconds,
+            )
+        )
+
         asyncio.create_task(
             notify_hook(
                 context.call_end_hook,
@@ -1284,3 +1766,35 @@ async def call_agent_bridge(
         )
 
         send_allowed.set()
+
+
+@router.get("/ari/callaccepted")
+async def ari_debug(
+    from_number: str = Query(..., alias="from"),
+    to_number: str = Query(..., alias="to"),
+    type: str = Query(..., alias="type"),
+) -> Dict[str, Any]:
+
+    call_id: Optional[str] = None
+
+    external_call_id = await _fetch_external_call_id(
+        from_number, to_number, "sipturnk", type
+    )
+    if external_call_id:
+        call_id = external_call_id
+    else:
+        call_id = str(uuid.uuid4())
+
+    logger.info(
+        "ARI debug request received: from=%s to=%s call_id=%s",
+        from_number,
+        to_number,
+        call_id,
+    )
+
+    # raise ValueError("ARI debug endpoint is deprecated")
+    return {
+        "from": from_number,
+        "to": to_number,
+        "call_id": call_id,
+    }
