@@ -10,7 +10,7 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from xml.etree import ElementTree as ET
@@ -216,6 +216,7 @@ class CallAgentContext:
     elevenlabs_api_key: Optional[str] = None
     conversation_id: Optional[str] = None
     started_at: Optional[float] = None
+    registered_tools: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
     def from_websocket(
@@ -263,6 +264,17 @@ class CallAgentContext:
             "CallEndHook": self.call_end_hook,
             "ConversationId": self.conversation_id,
         }
+
+    def register_tool(self, tool_id: str, tool_hook: str) -> None:
+        if not tool_id:
+            return
+
+        normalized_id = tool_id.strip().lower()
+        if not normalized_id:
+            return
+
+        self.registered_tools[normalized_id] = tool_hook
+        logger.info("Registered ElevenLabs tool: %s", tool_id)
 
 
 @router.post("/twilio/call", status_code=status.HTTP_202_ACCEPTED)
@@ -674,6 +686,29 @@ async def _accept_external_call(
         return False, None
 
 
+def _register_tools_from_accept(context: CallAgentContext, tools_payload: Any) -> None:
+    if not tools_payload:
+        return
+
+    if isinstance(tools_payload, dict):
+        iterable = [tools_payload]
+    elif isinstance(tools_payload, list):
+        iterable = tools_payload
+    else:
+        return
+
+    for entry in iterable:
+        if not isinstance(entry, dict):
+            continue
+
+        tool_name = entry.get("name")
+
+        if not tool_name:
+            continue
+
+        context.register_tool(tool_name, entry.get("hookurl"))
+
+
 def _build_twilio_twiml(stream_url: str, parameters: Dict[str, str]) -> str:
     response_el = ET.Element("Response")
     connect_el = ET.SubElement(response_el, "Connect")
@@ -821,8 +856,10 @@ class ElevenLabsClient:
         self.current_agent_id: Optional[str] = (
             context.agent_id or config.elevenlabs_agent_id
         )
+        self.registered_tools = {}
 
     async def _get_signed_url(self, agent_id: Optional[str]) -> str:
+
         api_key = self._context.elevenlabs_api_key or self._config.elevenlabs_api_key
         if not api_key:
             raise RuntimeError("ElevenLabs API key is not configured")
@@ -962,6 +999,95 @@ class ElevenLabsClient:
 
         await self.ws.send(json.dumps(message))
 
+    def _find_registered_tool(
+        self, tool_name: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        if not tool_name:
+            return None
+
+        normalized = tool_name.strip().lower()
+        if not normalized:
+            return None
+
+        if self._context.registered_tools:
+            candidate = self._context.registered_tools.get(normalized)
+            if candidate:
+                return candidate
+
+        return self.registered_tools.get(normalized)
+
+    async def _invoke_tool_hook(
+        self,
+        url: str,
+        payload: Any,
+        tool_name: str,
+        tool_call_id: Optional[str],
+    ) -> None:
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.post(url, json=payload, timeout=15)
+
+            logger.info(
+                "Forwarded ElevenLabs tool call %s (id=%s) to %s",
+                tool_name,
+                tool_call_id,
+                url,
+            )
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning(
+                "Tool %s invocation failed (id=%s): %s",
+                tool_name,
+                tool_call_id,
+                exc,
+            )
+
+    async def _handle_client_tool_call_event(self, event: Dict[str, Any]) -> None:
+        tool_payload = event.get("client_tool_call")
+        if not isinstance(tool_payload, dict):
+            return
+
+        raw_name = (tool_payload.get("tool_name") or "").strip()
+        if not raw_name:
+            return
+
+        tool_info = self._find_registered_tool(raw_name)
+        if not tool_info:
+            logger.warning(
+                "Received tool call for unregistered tool '%s' (call_id=%s)",
+                raw_name,
+                self._context.callid,
+            )
+            return
+
+        hook_url = tool_info
+
+        if not hook_url:
+            logger.warning(
+                "Registered tool '%s' missing hook URL; skipping invocation",
+                raw_name,
+            )
+            return
+
+        parameters = tool_payload.get("parameters")
+        if isinstance(parameters, dict):
+            body: Any = dict(parameters)
+        else:
+            body = {"parameters": parameters}
+
+        tool_call_id = tool_payload.get("tool_call_id")
+        metadata: Dict[str, Any] = {}
+        if tool_call_id:
+            metadata["tool_call_id"] = tool_call_id
+        if self._context.callid:
+            metadata["call_id"] = self._context.callid
+
+        if metadata and isinstance(body, dict):
+            body.setdefault("_metadata", metadata)
+
+        asyncio.create_task(
+            self._invoke_tool_hook(hook_url, body, raw_name, tool_call_id)
+        )
+
     async def listen(self, asterisk_ws: WebSocket) -> None:
         if not self.ws:
             return
@@ -1033,8 +1159,11 @@ class ElevenLabsClient:
                             self._context.callid,
                         )
 
+                elif event_type == "client_tool_call":
+                    asyncio.create_task(self._handle_client_tool_call_event(data))
+
                 else:
-                    logger.debug("Unhandled ElevenLabs event: %s", event_type)
+                    logger.info("Unhandled ElevenLabs event: %s", event_type)
 
         except (ConnectionClosedError, ConnectionClosedOK):
             logger.info("ElevenLabs WebSocket closed")
@@ -1137,6 +1266,9 @@ class ElevenLabsClient:
                         data.get("user_transcription_event", {}).get("user_transcript"),
                     )
 
+                elif event_type == "client_tool_call":
+                    asyncio.create_task(self._handle_client_tool_call_event(data))
+
                 else:
                     logger.debug("Unhandled ElevenLabs event: %s", event_type)
 
@@ -1146,6 +1278,34 @@ class ElevenLabsClient:
             logger.debug("ElevenLabs Twilio listener task cancelled")
         except Exception as exc:
             logger.error("Error in ElevenLabs Twilio listener: %s", exc)
+
+    def register_tool(self, tool_id: str, tool_info: Dict[str, Any]) -> None:
+        if not tool_id:
+            return
+
+        normalized_id = tool_id.strip().lower()
+        if not normalized_id:
+            return
+
+        info: Dict[str, Any] = dict(tool_info or {})
+        hook = (
+            info.get("toolhook")
+            or info.get("tool_hook")
+            or info.get("hook")
+            or info.get("url")
+        )
+        if not hook:
+            logger.warning(
+                "Skipping ElevenLabs client tool registration for %s: missing hook",
+                tool_id,
+            )
+            return
+
+        info["toolhook"] = hook
+        info.setdefault("tool_name", tool_id)
+
+        self.registered_tools[normalized_id] = info
+        logger.info("Registered ElevenLabs tool: %s", tool_id)
 
 
 @router.websocket("/twilio")
@@ -1234,6 +1394,8 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                     await websocket.close(code=4003, reason="Call not accepted")
                     return
 
+                tools_payload: Any = None
+
                 if accept_data:
                     first_message_override = accept_data.get("firstMessage")
                     if first_message_override:
@@ -1252,6 +1414,8 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                     api_key_override = accept_data.get("elevenlabsApiKey")
                     if api_key_override:
                         custom_params["elevenlabsApiKey"] = api_key_override
+
+                    tools_payload = accept_data.get("tools")
                 else:
                     api_key_override = None
 
@@ -1332,6 +1496,9 @@ async def twilio_call_bridge(websocket: WebSocket) -> None:
                     elevenlabs_api_key=api_key_override
                     or custom_params.get("elevenlabsApiKey"),
                 )
+
+                if tools_payload:
+                    _register_tools_from_accept(call_context, tools_payload)
 
                 eleven_client = ElevenLabsClient(config, call_context)
 
@@ -1531,8 +1698,8 @@ async def originate_ari_call(
         "priority": str(priority),
         "timeout": str(timeout),
     }
-    if payload.to_number:
-        params["callerId"] = payload.to_number
+    if caller_id:
+        params["callerId"] = caller_id
     if variables_param:
         params["variables"] = variables_param
 
@@ -1656,6 +1823,8 @@ async def call_agent_bridge(
         context.elevenlabs_api_key = (
             accept_data.get("elevenlabsApiKey") or context.elevenlabs_api_key
         )
+
+        _register_tools_from_accept(context, accept_data.get("tools"))
 
     logger.info("External service accepted ARI call %s", context.callid)
 
